@@ -40,7 +40,7 @@ class SecretShare:
                 for i in range(len(x_points)):
                     print('Share %s: %s' % (i, shares[i]))
             
-        return shares
+        return shares, q
     
     # shares is a dictionary
     def recoverCoefficients(self, list):

@@ -13,7 +13,7 @@ class SecretShareTest(unittest.TestCase):
 
           s = SecretShare(group, False)
           sec = group.random(ZR)
-          shares = s.genShares(sec, k, n)
+          shares, q = s.genShares(sec, k, n)
 
           K = shares[0]
           if debug: print('\nOriginal secret: %s' % K)

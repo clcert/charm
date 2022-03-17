@@ -15,6 +15,7 @@ El Gamal Public Key Encryption Scheme (Decisional Diffie-Hellman Assumption in g
 from charm.toolbox.PKEnc import PKEnc
 from charm.toolbox.ecgroup import G
 
+
 debug = False
 class ElGamalCipher(dict):
     def __init__(self, ct):
@@ -112,3 +113,4 @@ class ElGamal(PKEnc):
         if debug: print('m => %s' % m)
         if debug: print('dec M => %s' % M)
         return M
+
