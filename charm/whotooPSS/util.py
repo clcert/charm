@@ -104,23 +104,44 @@ class User():
 		self.temp = None
 		self.next_mac = 0
 
-class Server():
+class Manager():
 	
-
 	# accusations = {}
 	# unique_accs = set()
 	# accs = {}
 	# reused_vals = set()
-	
 
-	def __init__(self, id, n):
+	"""
+	Scheme manager class
+	
+	mskit = (xit, gammait)
+		xit : skeg_share
+		gammait : skbbs_share
+
+	Attributes
+	----------
+	id : int
+		Identifier of the manager.
+	da_shares : :py:class:`pairing.Element`
+		Share of distributed authority commitment
+	skeg_share : :py:class:`pairing.Element`
+		Share of ElGamal secret key.
+	skbbs_share : :py:class:`pairing.Element`
+		Share of BBS secret key.
+	beaver : ?
+		?
+	gen : ?
+		?
+	"""
+
+	def __init__(self, id: int, n: int):
 		self.id = id
 		self.da_shares = [0] * n
 		self.skeg_share = None
 		self.skbbs_share = None
 		self.skdiprf_share = None
-		self.skibe_share = None
-		self.last_acc = None
+		#self.skibe_share = None
+		#self.last_acc = None
 		self.temp1 = None
 		self.temp2 = None
 		self.temp3 = None

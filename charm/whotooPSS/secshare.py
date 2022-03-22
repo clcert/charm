@@ -9,7 +9,7 @@ from hashlib import sha256
 
 class SecShare():
 
-	def __init__(self, group, g, g2, k, n, el, servers=None):
+	def __init__(self, group, g, g2, k, n, el, managers=None):
 		self.k = k
 		self.n = n
 		self.group = group
@@ -22,7 +22,7 @@ class SecShare():
 		self.broadcast = {}
 		self.h = None
 		self.next_gen = 0
-		self.servers = servers
+		self.managers = managers
 		# self._lock = threading.Lock()
 
 
@@ -97,10 +97,10 @@ class SecShare():
 		# for p in servers:
 		# 	temp_func1(p)
 		# p_umap(temp_func1, servers)
-		thread_map(temp_func1, self.servers, leave=False)
+		thread_map(temp_func1, self.managers, leave=False)
 
 		def temp_func2(p):
-			for s in self.servers:
+			for s in self.managers:
 				if p.id != s.id:
 					var_name = 'exp_vals_' + str(s.id)
 					bs, gs, proof = self.broadcast[var_name]
@@ -112,10 +112,10 @@ class SecShare():
 		# for p in servers:
 		# 	temp_func2(p)
 		# p_umap(temp_func2, servers)
-		thread_map(temp_func2, self.servers, leave=False)
+		thread_map(temp_func2, self.managers, leave=False)
 
 		res = 1
-		for p in self.servers:
+		for p in self.managers:
 			pid = self.group.init(ZR, p.id)
 			var_name = 'exp_vals_' + str(p.id)
 			bs, gs, proof = self.broadcast[var_name]
@@ -125,25 +125,25 @@ class SecShare():
 
 	
 	# temp1 * temp2 = temp3
-	def mult2(self, servers):
-		for p in servers:
+	def mult2(self, managers):
+		for p in managers:
 			pid = p.id
 			z = p.temp1 * p.temp2
 			w, v, e0, r = self.share_encode(z)
 
-			for s in servers:
+			for s in managers:
 				sid = s.id
 				s.da_shares[pid-1] = w[sid][0]
 		
-		for p in servers:
+		for p in managers:
 			new_share = 0
-			for s in servers:
+			for s in managers:
 				sidg = self.group.init(ZR, s.id)
 				sid = s.id
 				new_share += self.coeffs[sidg] * p.da_shares[sid-1]
 			p.temp3 = new_share
 
-		return servers
+		return managers
 
 	# temp1 * temp2 = temp3 # beaver
 	def mult(self):
@@ -159,11 +159,11 @@ class SecShare():
 
 		# with concurrent.futures.ThreadPoolExecutor(max_workers=self.n) as executor:
 		# 	executor.map(temp_func1, servers)
-		thread_map(temp_func1, self.servers, leave=False)
+		thread_map(temp_func1, self.managers, leave=False)
 
 		d_shares = {}
 		e_shares = {}
-		for p in self.servers:
+		for p in self.managers:
 			var_name = 'mult_' + str(p.id)
 			d, e = self.broadcast[var_name]
 
@@ -184,7 +184,7 @@ class SecShare():
 
 		# with concurrent.futures.ThreadPoolExecutor(max_workers=self.n) as executor:
 		# 	executor.map(temp_func2, servers)
-		thread_map(temp_func2, self.servers, leave=False)
+		thread_map(temp_func2, self.managers, leave=False)
 
 
 
@@ -213,7 +213,7 @@ class SecShare():
 
 		# with concurrent.futures.ThreadPoolExecutor(max_workers=self.n) as executor:
 		# 	executor.map(temp_func, servers)
-		thread_map(temp_func, self.servers, leave=False)
+		thread_map(temp_func, self.managers, leave=False)
 
 		# verify proofs
 		# for p in servers:
@@ -224,7 +224,7 @@ class SecShare():
 
 		res0 = 1
 		res1 = 1
-		for p in self.servers:
+		for p in self.managers:
 			pid = self.group.init(ZR, p.id)
 			var_name = 'expRR_' + str(p.id)
 			ep0, ep1 = self.broadcast[var_name]
@@ -237,12 +237,12 @@ class SecShare():
 	# shares quedan en temp2
 	def gen(self, prev=True):
 
-		if (self.next_gen < len(self.servers[1].gen)-1) and prev:
+		if (self.next_gen < len(self.managers[1].gen)-1) and prev:
 			def temp_func(p):
 				p.temp2 = p.gen[self.next_gen]
 				
 			self.next_gen += 1
-			thread_map(temp_func, self.servers, leave=False)
+			thread_map(temp_func, self.managers, leave=False)
 
 		else:	
 			
@@ -253,7 +253,7 @@ class SecShare():
 				r = self.group.random(ZR)
 				w, v = self.gen_pedersen(z, r)
 
-				for s in self.servers:
+				for s in self.managers:
 					sid = s.id
 					s.da_shares[pid-1] = w[sid]
 
@@ -261,14 +261,14 @@ class SecShare():
 				# with self._lock:
 				self.broadcast[var_name] = v
 
-			thread_map(temp_func1, self.servers, leave=False)
+			thread_map(temp_func1, self.managers, leave=False)
 
 			def temp_func2(p):
 				pid = p.id
 				p.temp2 = 0
 				# p.temp2 = (0, 0)
 
-				for s in self.servers:
+				for s in self.managers:
 					sid = s.id
 					si, ri = p.da_shares[sid-1]
 
@@ -278,7 +278,7 @@ class SecShare():
 						verp = self.verify_pedersen(si, ri, vp, pid)
 
 						if not verp:
-							raise Exception('Server ' + str(pid) + ' failed to verify share from server ' + str(sid) + ' when generating random value')
+							raise Exception('Manager ' + str(pid) + ' failed to verify share from manager ' + str(sid) + ' when generating random value')
 
 					# new_x, new_r = p.temp2
 					new_x = p.temp2
@@ -287,7 +287,7 @@ class SecShare():
 					#new_r += ri
 					# p.temp2 = (new_x, new_r)
 
-			thread_map(temp_func2, self.servers, leave=False)
+			thread_map(temp_func2, self.managers, leave=False)
 
 
 
@@ -299,7 +299,7 @@ class SecShare():
 			r = self.group.random(ZR)
 			w, v, vf = self.gen_pedersen(z, r, feldman=True)
 
-			for s in self.servers:
+			for s in self.managers:
 				sid = s.id
 				s.da_shares[pid-1] = w[sid]
 
@@ -309,14 +309,14 @@ class SecShare():
 			self.broadcast[var_name1] = vf
 			self.broadcast[var_name2] = v
 
-		thread_map(temp_func1, self.servers, leave=False)
+		thread_map(temp_func1, self.managers, leave=False)
 
 		def temp_func2(p):
 			pid = p.id
 			#p.temp2 = (0, 0)
 			p.temp2 = 0
 
-			for s in self.servers:
+			for s in self.managers:
 				sid = s.id
 				si, ri = p.da_shares[sid-1]
 
@@ -339,10 +339,10 @@ class SecShare():
 				#new_r += ri
 				# p.temp2 = (new_x, new_r)
 		
-		thread_map(temp_func2, self.servers, leave=False)
+		thread_map(temp_func2, self.managers, leave=False)
 
 		h = 1
-		for p in self.servers:
+		for p in self.managers:
 			var_name = 'gen_feldman_' + str(p.id)
 			vf = self.broadcast[var_name]
 			h *= vf[0]
@@ -355,7 +355,7 @@ class SecShare():
 		self.mult()
 
 		w_shares = {}
-		for p in self.servers:
+		for p in self.managers:
 			dk = self.group.init(ZR, p.id)
 			w_shares[dk] = p.temp3
 
@@ -365,7 +365,7 @@ class SecShare():
 		def temp_func(p):
 			p.temp3 = p.temp2 * winv
 
-		thread_map(temp_func, self.servers, leave=False)
+		thread_map(temp_func, self.managers, leave=False)
 		
 
 	# res in temp2
@@ -381,18 +381,18 @@ class SecShare():
 			# with self._lock:
 			self.broadcast[var_name] = vf
 
-			for s in self.servers:
+			for s in self.managers:
 				sid = s.id
 				s.da_shares[pid-1] = w[sid][0]
 
-		thread_map(temp_func1, self.servers, leave=False)
+		thread_map(temp_func1, self.managers, leave=False)
 
 
 		def temp_func2(p):
 			pid = p.id
 			p.temp2 = 0
 
-			for s in self.servers:
+			for s in self.managers:
 				sid = s.id
 				si = p.da_shares[sid-1]
 
@@ -407,7 +407,7 @@ class SecShare():
 
 				p.temp2 += si
 
-		thread_map(temp_func2, self.servers, leave=False)
+		thread_map(temp_func2, self.managers, leave=False)
 
 
 
@@ -419,14 +419,14 @@ class SecShare():
 			p.temp1 = p.temp2 # x en temp1
 			p.temp4 = p.temp2 # a en temp4
 
-		thread_map(temp_func1, self.servers, leave=False)
+		thread_map(temp_func1, self.managers, leave=False)
 
 		self.invert() # x^-1 en temp3
 
 		def temp_func2(p):
 			p.temp1 = p.temp3 # x^-1 en temp1
 
-		thread_map(temp_func2, self.servers, leave=False)
+		thread_map(temp_func2, self.managers, leave=False)
 
 		gx = self.exp(self.g)
 		return gx
@@ -439,7 +439,7 @@ class SecShare():
 		def temp_func(p):
 			p.temp1 = p.skeg_share
 
-		thread_map(temp_func, self.servers, leave=False)
+		thread_map(temp_func, self.managers, leave=False)
 
 		d = self.exp(c1)
 		return c2/d
@@ -452,7 +452,7 @@ class SecShare():
 		def temp_func(p):
 			p.temp1 = p.skeg_share
 
-		thread_map(temp_func, self.servers, leave=False)
+		thread_map(temp_func, self.managers, leave=False)
 
 		d = self.exp(c1)
 		d_bytes = objectToBytes(d, self.group)
@@ -467,22 +467,22 @@ class SecShare():
 		def temp_func1(p):
 			p.temp1 = p.temp4 # alpha en temp1
 
-		thread_map(temp_func1, self.servers, leave=False)
+		thread_map(temp_func1, self.managers, leave=False)
 
 		self.mult() #  alpha*t en temp3
 		def temp_func2(p):
 			p.temp1 = p.temp3 # alpha*t en temp1
 
-		thread_map(temp_func2, self.servers, leave=False)
+		thread_map(temp_func2, self.managers, leave=False)
 
 		b1alpha = self.exp(b1)
 		def temp_func3(p):
 			p.temp1 = p.temp5 # beta en temp1
 
-		thread_map(temp_func3, self.servers, leave=False)
+		thread_map(temp_func3, self.managers, leave=False)
 
 		self.mult() #  beta*t en temp3
-		thread_map(temp_func2, self.servers, leave=False) # beta*t en temp1
+		thread_map(temp_func2, self.managers, leave=False) # beta*t en temp1
 			
 		b2beta = self.exp(b2)
 
@@ -490,10 +490,10 @@ class SecShare():
 		def temp_func4(p):
 			p.temp1 = p.temp2 # t en temp1
 
-		thread_map(temp_func4, self.servers, leave=False)
+		thread_map(temp_func4, self.managers, leave=False)
 
 		self.invert() #t^-1 en temp3
-		thread_map(temp_func2, self.servers, leave=False) # t^-1 en temp1
+		thread_map(temp_func2, self.managers, leave=False) # t^-1 en temp1
 		# for p in servers:
 		# 	p.temp1 = p.temp3 
 		
@@ -508,13 +508,13 @@ class SecShare():
 		def temp_func1(p):
 			p.temp1 = p.skdiprf_share + p.temp1 # t1=sk+x en temp1
 
-		thread_map(temp_func1, self.servers, leave=False)
+		thread_map(temp_func1, self.managers, leave=False)
 
 		self.invert() # t1^-1 en temp3
 		def temp_func2(p):
 			p.temp1 = p.temp3 # t1=sk+x en temp3
 
-		thread_map(temp_func2, self.servers, leave=False)
+		thread_map(temp_func2, self.managers, leave=False)
 
 		epair = self.group.pair_prod(self.g, self.g2)
 
@@ -526,7 +526,7 @@ class SecShare():
 			pid = p.id
 			recipient.da_shares[pid-1] = epair ** p.temp1
 		
-		thread_map(temp_func3, self.servers, leave=False)
+		thread_map(temp_func3, self.managers, leave=False)
 
 		return recipient
 
@@ -542,10 +542,10 @@ class SecShare():
 			# with self._lock:
 			self.broadcast[var_name] = (pi, a1, a2)
 
-		thread_map(temp_func1, self.servers, leave=False)
+		thread_map(temp_func1, self.managers, leave=False)
 
 		def temp_func2(p):
-			for s in self.servers:
+			for s in self.managers:
 				sid = s.id
 				if p.id != sid:
 					var_name = 'msgrand_'+ str(sid)
@@ -554,11 +554,11 @@ class SecShare():
 					if not ver:
 						raise Exception('Failed to verify during MsgRand')
 
-		thread_map(temp_func2, self.servers, leave=False)
+		thread_map(temp_func2, self.managers, leave=False)
 		
 		c1p = 1
 		c2p = 1
-		for p in self.servers:
+		for p in self.managers:
 			var_name = 'msgrand_'+ str(p.id)
 			pi, a1, a2 = self.broadcast[var_name]
 			c1p *= a1
