@@ -142,8 +142,19 @@ class WhoTooPSS():
 
         self.wtset = self.mset.initialize()
 
-    def issue(self):
-        pass
+    def issue(self, user: User):
+        """
+        Issuing of user key
+
+        Parameters
+        ----------
+        user : :py:class:`util.User`
+            user requesting a signing key.
+        """
+        # A = r
+        self.managers, r = self.bbs.key_issue(self.managers, user)
+        self.id_map[r] = user
+
 
     def recover(self):
         pass

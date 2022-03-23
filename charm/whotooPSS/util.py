@@ -94,15 +94,34 @@ class Accusation():
 
 class User():
 
+	"""
+	User class
+
+	skU = (A, alpha)
+		A : R
+		alpha : alpha
+
+	Attributes
+	----------
+	id : int
+		Identifier of the user.
+	da_shares : list[:py:class:`pairing.Element`]
+		Shares of distributed authority commitment.
+	R : :py:class:`pairing.Element`
+		Public key.
+	alpha : :py:class:`pairing.Element`
+		Secret key.
+	"""
+
 	def __init__(self, id, n):
 		self.id = id
 		self.da_shares = [0] * n
 		self.R = None
-		self.tau = None
+		#self.tau = None
 		self.alpha = None
-		self.macs = []
+		#self.macs = []
 		self.temp = None
-		self.next_mac = 0
+		#self.next_mac = 0
 
 class Manager():
 	
@@ -122,8 +141,8 @@ class Manager():
 	----------
 	id : int
 		Identifier of the manager.
-	da_shares : :py:class:`pairing.Element`
-		Share of distributed authority commitment
+	da_shares : list[:py:class:`pairing.Element`]
+		Shares of distributed authority commitment.
 	skeg_share : :py:class:`pairing.Element`
 		Share of ElGamal secret key.
 	skbbs_share : :py:class:`pairing.Element`

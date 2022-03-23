@@ -18,11 +18,11 @@ class BBS():
 		self.w = w
 		self.h = Hash(pairingElement=self.group)
 
-	def key_issue(self, servers, user):
-		self.sec_share.servers = servers
+	def key_issue(self, managers, user):
+		self.sec_share.managers = managers
 		r = self.sec_share.gen_inv()
 
-		for p in self.sec_share.servers:
+		for p in self.sec_share.managers:
 			pid = p.id
 			alphai = p.temp4 - p.skbbs_share
 			user.da_shares[pid-1] = alphai
@@ -33,9 +33,7 @@ class BBS():
 		user.alpha = alpha
 		user.R = r
 
-		return servers, r
-
-
+		return managers, r
 
 	def phi(self, t1, t2, t3, c1, c2):
 		tt1 = self.u ** t1
