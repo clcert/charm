@@ -8,12 +8,11 @@ n = 6
 group = PairingGroup('BN254')
 
 whotoo = WhoTooPSS(group, k, n)
-user = User(0, n)
 
+user = User(0, n)
 whotoo.issue(user)
 
-print(user.id)
-print(user.da_shares)
-print(user.alpha)
-print(user.R)
-print(user.temp)
+msg = "Message to sign"
+(c, sigma) = whotoo.sign(user, msg)
+print(c)
+print(sigma)

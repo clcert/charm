@@ -149,12 +149,11 @@ class WhoTooPSS():
         Parameters
         ----------
         user : :py:class:`util.User`
-            user requesting a signing key.
+            User requesting a signing key.
         """
         # A = r
         self.managers, r = self.bbs.key_issue(self.managers, user)
         self.id_map[r] = user
-
 
     def recover(self):
         pass
@@ -162,8 +161,23 @@ class WhoTooPSS():
     def update(self):
         pass
 
-    def sign(self):
-        pass
+    def sign(self, user: User, msg: str):
+        """
+        Signing of message
+
+        Parameters
+        ----------
+        user : :py:class:`util.User`
+            Signer user.
+        msg : str
+            Message to be signed.
+        
+        Returns
+        -------
+        tuple[tuple[:py:class:`pairing.Element`], tuple[:py:class:`pairing.Element`]]
+            Signature of the message.
+        """
+        return self.bbs.sign((user.R, user.alpha), msg)
 
     def verify(self):
         pass
