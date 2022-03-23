@@ -1,4 +1,3 @@
-from concurrent.futures import thread
 from charm.toolbox.hash_module import Hash
 from charm.toolbox.pairinggroup import (
     G1,
@@ -161,7 +160,7 @@ class WhoTooPSS():
     def update(self):
         pass
 
-    def sign(self, user: User, msg: str):
+    def sign(self, user: User, msg: str) -> "tuple[tuple]":
         """
         Signing of message
 
@@ -174,13 +173,13 @@ class WhoTooPSS():
         
         Returns
         -------
-        tuple[tuple[:py:class:`pairing.Element`], tuple[:py:class:`pairing.Element`]]
+        tuple[tuple[:py:class:`pairing.Element`]]
             Signature of the message.
         """
         return self.bbs.sign((user.R, user.alpha), msg)
 
-    def verify(self):
-        pass
+    def verify(self, m: str, c: tuple, sigma: tuple) -> bool:
+        return self.bbs.verify(m, c, sigma)
 
     def trace(self):
         pass

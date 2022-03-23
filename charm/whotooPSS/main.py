@@ -14,5 +14,5 @@ whotoo.issue(user)
 
 msg = "Message to sign"
 (c, sigma) = whotoo.sign(user, msg)
-print(c)
-print(sigma)
+verified = whotoo.verify(msg, c, sigma)
+print(verified)
