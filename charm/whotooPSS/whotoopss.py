@@ -153,6 +153,7 @@ class WhoTooPSS():
         # A = r
         self.managers, r = self.bbs.key_issue(self.managers, user)
         self.id_map[r] = user
+        self.users.append(user)
 
     def recover(self):
         pass
@@ -179,7 +180,46 @@ class WhoTooPSS():
         return self.bbs.sign((user.R, user.alpha), msg)
 
     def verify(self, m: str, c: tuple, sigma: tuple) -> bool:
+        """
+        Verifies that the signature is valid to the user group
+
+        Parameters
+        ----------
+        m : str
+            Message to sign.
+        c : tuple[:py:class:`pairing.Element`]
+            ElGamal encryption of the signers public key.
+        sigma : tuple[:py:class:`pairing.Element`]
+            Signature of the message.
+
+        Returns
+        -------
+        bool
+            True if the signature is valid and was produced by a
+            user of the scheme, False if not
+        """
         return self.bbs.verify(m, c, sigma)
 
-    def trace(self):
-        pass
+    def trace(self, m: str, c: tuple, sigma: tuple) -> int:
+        """
+        Traces the signer of a given message
+
+        Parameters
+        ----------
+        m : str
+            Signed message.
+        c : tuple[:py:class:`pairing.Element`]
+            ElGamal encryption of the signers public key.
+        sigma : tuple[:py:class:`pairing.Element`]
+            Signature of the message.
+
+        Returns
+        -------
+        int
+            Identity of the signer or -1 if the signature is invalid
+        """
+        if self.verify(m, c, sigma):
+            r = self.sec_share.dist_dec(c)
+            return self.id_map[r].id
+        else:
+            return -1

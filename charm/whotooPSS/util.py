@@ -117,18 +117,10 @@ class User():
 		self.id = id
 		self.da_shares = [0] * n
 		self.R = None
-		#self.tau = None
 		self.alpha = None
-		#self.macs = []
 		self.temp = None
-		#self.next_mac = 0
 
 class Manager():
-	
-	# accusations = {}
-	# unique_accs = set()
-	# accs = {}
-	# reused_vals = set()
 
 	"""
 	Scheme manager class
@@ -159,8 +151,6 @@ class Manager():
 		self.skeg_share = None
 		self.skbbs_share = None
 		self.skdiprf_share = None
-		#self.skibe_share = None
-		#self.last_acc = None
 		self.temp1 = None
 		self.temp2 = None
 		self.temp3 = None
