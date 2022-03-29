@@ -1,5 +1,5 @@
-from charm.toolbox.pairinggroup import PairingGroup,ZR
-from charm.core.engine.util import objectToBytes,bytesToObject
+from charm.core.engine.util import objectToBytes
+from charm.toolbox.pairinggroup import ZR
 from charm.toolbox.hash_module import *
 
 def pedersen_commit(g, h, msg, r):
@@ -60,9 +60,6 @@ def mr_verify(group, c1, c2, pi, a1, a2):
 	alpha = hashfunc.hashToZr(a1b, a2b, b1b, b2b, c1b, c2b)
 	return (c1 ** beta == a1 * (b1 ** alpha)) and (c2 ** beta == a2 * (b2 ** alpha))
 
-
-
-
 class Accusation():
 	id = None
 	cR = None
@@ -91,7 +88,6 @@ class Accusation():
 		self.pi0 = pi0
 		self.pi1 = pi1
 
-
 class User():
 
 	"""
@@ -119,44 +115,3 @@ class User():
 		self.R = None
 		self.alpha = None
 		self.temp = None
-
-class Manager():
-
-	"""
-	Scheme manager class
-	
-	mskit = (xit, gammait)
-		xit : skeg_share
-		gammait : skbbs_share
-
-	Attributes
-	----------
-	id : int
-		Identifier of the manager.
-	da_shares : list[:py:class:`pairing.Element`]
-		Shares of distributed authority commitment.
-	skeg_share : :py:class:`pairing.Element`
-		Share of ElGamal secret key.
-	skbbs_share : :py:class:`pairing.Element`
-		Share of BBS secret key.
-	beaver : ?
-		?
-	gen : ?
-		?
-	"""
-
-	def __init__(self, id: int, n: int):
-		self.id = id
-		self.da_shares = [0] * n
-		self.skeg_share = None
-		self.skbbs_share = None
-		self.skdiprf_share = None
-		self.temp1 = None
-		self.temp2 = None
-		self.temp3 = None
-		self.temp4 = None
-		self.temp5 = None
-		self.temp6 = None
-		self.temp7 = None
-		self.beaver = None
-		self.gen = []

@@ -1,14 +1,17 @@
+from charm.toolbox.eccurve import prime192v1
+from charm.toolbox.ecgroup import ECGroup
 from charm.toolbox.pairinggroup import PairingGroup
-from numpy import identity
 
+from manager import Manager
 from util import User
 from whotoopss import WhoTooPSS
 
 k = 4
 n = 6
 group = PairingGroup('BN254')
+curve = ECGroup(prime192v1)
 
-whotoo = WhoTooPSS(group, k, n)
+whotoo = WhoTooPSS(group, curve, k, n)
 
 user = User(0, n)
 whotoo.issue(user)
@@ -18,8 +21,17 @@ msg = "Message to sign"
 verified = whotoo.verify(msg, c, sigma)
 print(verified)
 
-identity = whotoo.trace(msg, c, sigma)
-if identity == -1:
+id = whotoo.trace(msg, c, sigma)
+if id == -1:
     print("Invalid signature")
 else:
-    print(f"Accuser identified as {identity}")
+    print(f"Accuser identified as {id}")
+
+c = whotoo.managers[1].encrypt(12345, whotoo.managers[2].get_pkenc())
+print(whotoo.managers[2].decrypt(c))
+
+rpc = 3
+mgr = Manager(rpc, n)
+print(whotoo.managers[rpc])
+whotoo.recover(rpc, mgr)
+print(whotoo.managers[rpc])

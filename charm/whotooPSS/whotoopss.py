@@ -1,3 +1,5 @@
+from charm.schemes.pkenc.pkenc_cs98 import CS98
+from charm.toolbox.ecgroup import ECGroup
 from charm.toolbox.hash_module import Hash
 from charm.toolbox.pairinggroup import (
     G1,
@@ -9,9 +11,9 @@ from tqdm.contrib.concurrent import thread_map
 
 from bbs import BBS
 from elgamal import ElGamal
+from manager import Manager
 from secshare import SecShare
 from util import (
-    Manager,
     User
 )
 from wtset import PrivateMultiset
@@ -78,7 +80,7 @@ class WhoTooPSS():
         Traces a signature to its signer
     """
 
-    def __init__(self, group: PairingGroup, k: int, n: int):
+    def __init__(self, group: PairingGroup, curve: ECGroup, k: int, n: int):
 
         self.group = group
         self.hash_func = Hash(pairingElement=self.group)
@@ -92,6 +94,7 @@ class WhoTooPSS():
         self.k = k
         self.n = n
 
+        self.cs = CS98(curve)
         self.eg = ElGamal(self.group)
         self.sec_share = SecShare(self.group, self.g1, self.g2, self.k, self.n, self.eg)
         self.sec_share.h = self.group.random(G1) #temp
@@ -108,7 +111,7 @@ class WhoTooPSS():
         #initialize managers
         self.managers = []
         for i in range(1, n+1):
-            man = Manager(i, n)
+            man = Manager(i, n, self.cs)
             man.beaver = (wa[i][0], wb[i][0], wc[i][0])
             self.managers.append(man)
 
@@ -155,8 +158,39 @@ class WhoTooPSS():
         self.id_map[r] = user
         self.users.append(user)
 
-    def recover(self):
-        pass
+    def recover(self, id, mgr):
+        """
+        Replaces the selected manager with a new one
+
+        Parameters
+        ----------
+        id : int
+            Identity of the manager to be replaced.
+        mgr : :py:class:`util.Manager`
+            New manager to be included.
+        """
+        mgr.beaver = self.managers[id].beaver
+        self.managers[id] = mgr
+        deltas = []
+
+        for p in self.managers:
+            if p.id != id:
+                p.gen_delta()
+                deltas.append(p.pub_delta(id))
+
+        x_shares = {}
+        gamma_shares = {}
+        for p in self.managers:
+            if p.id != id:
+                xi, gammai = p.comp_shares(deltas, id)
+                x_shares[self.group.init(ZR, p.id)] = xi
+                gamma_shares[self.group.init(ZR, p.id)] = gammai
+
+        x = self.sec_share.reconstruct(x_shares)
+        gamma = self.sec_share.reconstruct(gamma_shares)
+
+        print(f"x: {x}")
+        print(f"gamma: {gamma}")
 
     def update(self):
         pass
