@@ -1,4 +1,7 @@
-from charm.schemes.pkenc.pkenc_cs98 import CS98
+from pydoc import doc
+from quopri import encode
+from charm.schemes.pkenc.pkenc_rsa import RSA_Enc
+from random import randint
 
 class Manager():
 
@@ -13,6 +16,8 @@ class Manager():
     ----------
     id : int
         Identifier of the manager.
+    n : int
+        Total number of managers.
     da_shares : list[:py:class:`pairing.Element`]
         Shares of distributed authority commitment.
     skeg_share : :py:class:`pairing.Element`
@@ -25,15 +30,18 @@ class Manager():
         Public key for encryption.
     skenc : dict
         Secret key for encryption.
+    deltas : list[int]
+        Delta coefficients.
     """
 
-    def __init__(self, id: int, n: int, cs: CS98):
+    def __init__(self, id: int, n: int, enc: RSA_Enc):
         self.id = id
+        self.n = n
         self.da_shares = [0] * n
         self.skeg_share = None
         self.skbbs_share = None
-        self.enc = cs
-        (self.pkenc, self.skenc) = cs.keygen()
+        self.enc = enc
+        (self.pkenc, self.skenc) = enc.keygen()
         self.temp1 = None
         self.temp2 = None
         self.temp3 = None
@@ -43,7 +51,7 @@ class Manager():
         self.temp7 = None
         self.beaver = None
         self.gen = []
-        self.delta = []
+        self.deltas = []
 
     def get_pkenc(self) -> dict:
         """
@@ -72,7 +80,7 @@ class Manager():
         dict
             Encryption of the message.
         """
-        m = msg.to_bytes(20, byteorder='big')
+        m = bytes(str(msg), 'utf-8')
         return self.enc.encrypt(rpk, m)
 
     def decrypt(self, cph: dict) -> int:
@@ -90,13 +98,70 @@ class Manager():
             Decrypted message.
         """
         rm = self.enc.decrypt(self.pkenc, self.skenc, cph)
-        return int.from_bytes(rm, byteorder='big')
+        return int(rm.decode('utf-8'))
 
-    def gen_delta(self):
-        pass
+    def gen_delta(self, x: int, q: int):
+        """
+        Computes delta coefficients so the polinomial crosses at x
+        
+        Parameters
+        ----------
+        x : int
+            Point where the polinomial crosses the x axis.
+        """
+        deltas = [0]
+        for i in range(1, self.n):
+            deltas.append(randint(1, q) % q)
+            deltas[0] -= deltas[i] * (x ** i)
+        deltas[0] %= q
+        self.deltas = deltas
 
-    def pub_delta(self, id: int):
-        pass
+    def pub_deltas(self, id: int, mgr_pk: list) -> list:
+        """
+        Publish the delta coefficients
 
-    def comp_shares(self, deltas, id: int):
-        pass
+        Parameters
+        ----------
+        id : int
+            Identifier of the replaced manager.
+        mgr_pk : list[dict]
+            Public keys of all the managers.
+
+        Returns
+        -------
+        list[dict]
+            Encrypted delta coefficients.
+        """
+        deltas = []
+        for i in range(1, self.n + 1):
+            if i != id:
+                pkt = self.encrypt(self.deltas[i-1], mgr_pk[i-1])
+            else:
+                pkt = 0
+            deltas.append(pkt)
+        return deltas
+
+    def comp_shares(self, deltas: dict, id: int) -> list:
+        """
+        Calculates the shares of the new manager's secret key
+
+        Parameters
+        ----------
+        deltas : dict[list[bytes]]
+            Encryption of the delta coeffcients published by all managers.
+        id : int
+            Identity of the manager beeing replaced.
+
+        Returns
+        -------
+        list[pairing.Element]
+            Share of the new manager's secret key
+        """
+        x_prime = self.skeg_share
+        gamma_prime = self.skbbs_share
+        for i in range(1, self.n + 1):
+            if i != id:
+                dec_delta = self.decrypt(deltas[i][self.id - 1])
+                x_prime += dec_delta
+                gamma_prime += dec_delta
+        return (x_prime, gamma_prime)

@@ -1,5 +1,3 @@
-from charm.toolbox.eccurve import prime192v1
-from charm.toolbox.ecgroup import ECGroup
 from charm.toolbox.pairinggroup import PairingGroup
 
 from manager import Manager
@@ -9,9 +7,8 @@ from whotoopss import WhoTooPSS
 k = 4
 n = 6
 group = PairingGroup('BN254')
-curve = ECGroup(prime192v1)
 
-whotoo = WhoTooPSS(group, curve, k, n)
+whotoo = WhoTooPSS(group, k, n)
 
 user = User(0, n)
 whotoo.issue(user)
@@ -31,7 +28,7 @@ c = whotoo.managers[1].encrypt(12345, whotoo.managers[2].get_pkenc())
 print(whotoo.managers[2].decrypt(c))
 
 rpc = 3
-mgr = Manager(rpc, n)
+mgr = Manager(rpc, n, whotoo.enc)
 print(whotoo.managers[rpc])
 whotoo.recover(rpc, mgr)
 print(whotoo.managers[rpc])

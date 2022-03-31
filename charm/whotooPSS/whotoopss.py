@@ -1,4 +1,4 @@
-from charm.schemes.pkenc.pkenc_cs98 import CS98
+from charm.schemes.pkenc.pkenc_rsa import RSA_Enc
 from charm.toolbox.ecgroup import ECGroup
 from charm.toolbox.hash_module import Hash
 from charm.toolbox.pairinggroup import (
@@ -80,12 +80,13 @@ class WhoTooPSS():
         Traces a signature to its signer
     """
 
-    def __init__(self, group: PairingGroup, curve: ECGroup, k: int, n: int):
+    def __init__(self, group: PairingGroup, k: int, n: int):
 
         self.group = group
         self.hash_func = Hash(pairingElement=self.group)
 
         self.users = []
+        self.mgr_pk = []
         self.id_map = {}
         
         self.g1 = self.group.random(G1)
@@ -94,7 +95,7 @@ class WhoTooPSS():
         self.k = k
         self.n = n
 
-        self.cs = CS98(curve)
+        self.enc = RSA_Enc()
         self.eg = ElGamal(self.group)
         self.sec_share = SecShare(self.group, self.g1, self.g2, self.k, self.n, self.eg)
         self.sec_share.h = self.group.random(G1) #temp
@@ -111,9 +112,10 @@ class WhoTooPSS():
         #initialize managers
         self.managers = []
         for i in range(1, n+1):
-            man = Manager(i, n, self.cs)
+            man = Manager(i, n, self.enc)
             man.beaver = (wa[i][0], wb[i][0], wc[i][0])
             self.managers.append(man)
+            self.mgr_pk.append(man.get_pkenc())
 
         self.sec_share.managers = self.managers
 
@@ -170,16 +172,17 @@ class WhoTooPSS():
             New manager to be included.
         """
         mgr.beaver = self.managers[id].beaver
-        self.managers[id] = mgr
-        deltas = []
+        deltas = {}
+        ord = self.group.order()
 
         for p in self.managers:
             if p.id != id:
-                p.gen_delta()
-                deltas.append(p.pub_delta(id))
+                p.gen_delta(id, ord)
+                deltas[p.id] = p.pub_deltas(id, self.mgr_pk)
 
         x_shares = {}
         gamma_shares = {}
+
         for p in self.managers:
             if p.id != id:
                 xi, gammai = p.comp_shares(deltas, id)
@@ -189,8 +192,11 @@ class WhoTooPSS():
         x = self.sec_share.reconstruct(x_shares)
         gamma = self.sec_share.reconstruct(gamma_shares)
 
+        # TODO: Check reconstruction index
         print(f"x: {x}")
+        print(f"x_o: {self.managers[id].skeg_share}")
         print(f"gamma: {gamma}")
+        print(f"gamma_o: {self.managers[id].skbbs_share}")
 
     def update(self):
         pass
