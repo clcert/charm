@@ -2,7 +2,7 @@ import charm.toolbox.symcrypto
 from tqdm.contrib.concurrent import thread_map
 from util import pedersen_commit, zklogeq, zklogeq_verify, mr_prove, mr_verify
 from charm.toolbox.hash_module import *
-from charm.toolbox.pairinggroup import PairingGroup,ZR
+from charm.toolbox.pairinggroup import ZR
 from charm.core.engine.util import objectToBytes
 from charm.toolbox.secretshare import *
 from hashlib import sha256
@@ -72,6 +72,26 @@ class SecShare():
 	def reconstruct(self, shares):
 		return self.ss.recoverSecret(shares)
 
+	def reconstruct_d(self, shares, x, q):
+		list = shares.keys()
+		#coeff = self.ss.recoverCoefficients(list)
+		coeff = self.recover_coeff(list, x)
+		secret = 0
+		for i in list:
+			#secret += (coeff[i] * self.group.init(ZR, shares[i]))
+			secret += (int(coeff[i]) * shares[i]) % q
+		return secret
+
+	def recover_coeff(self, list, x):
+		coeff = {}
+		for i in list:
+			result = 1
+			for j in list:
+				if not (i == j):
+					# lagrange basis poly
+					result *= (x - j) / (i - j)
+			coeff[i] = result
+		return coeff
 
 	def share_encode(self, s):
 		r = self.group.random(ZR)

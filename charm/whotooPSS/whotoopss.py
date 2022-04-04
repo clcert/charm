@@ -86,7 +86,7 @@ class WhoTooPSS():
         self.hash_func = Hash(pairingElement=self.group)
 
         self.users = []
-        self.mgr_pk = []
+        self.mgr_pk = {}
         self.id_map = {}
         
         self.g1 = self.group.random(G1)
@@ -115,7 +115,7 @@ class WhoTooPSS():
             man = Manager(i, n, self.enc)
             man.beaver = (wa[i][0], wb[i][0], wc[i][0])
             self.managers.append(man)
-            self.mgr_pk.append(man.get_pkenc())
+            self.mgr_pk[i] = man.get_pkenc()
 
         self.sec_share.managers = self.managers
 
@@ -185,18 +185,15 @@ class WhoTooPSS():
 
         for p in self.managers:
             if p.id != id:
-                xi, gammai = p.comp_shares(deltas, id)
+                xi, gammai = p.comp_shares(deltas, mgr.get_pkenc(), id, ord)
                 x_shares[self.group.init(ZR, p.id)] = xi
                 gamma_shares[self.group.init(ZR, p.id)] = gammai
 
-        x = self.sec_share.reconstruct(x_shares)
-        gamma = self.sec_share.reconstruct(gamma_shares)
+        mgr.reconstruct(x_shares, gamma_shares, self.sec_share, ord)
 
         # TODO: Check reconstruction index
-        print(f"x: {x}")
-        print(f"x_o: {self.managers[id].skeg_share}")
-        print(f"gamma: {gamma}")
-        print(f"gamma_o: {self.managers[id].skbbs_share}")
+        print(f"x_orig     : {self.managers[id].skeg_share}")
+        print(f"gamma_orig : {self.managers[id].skbbs_share}")
 
     def update(self):
         pass

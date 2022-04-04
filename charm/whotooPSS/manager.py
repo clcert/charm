@@ -1,7 +1,7 @@
-from pydoc import doc
-from quopri import encode
 from charm.schemes.pkenc.pkenc_rsa import RSA_Enc
 from random import randint
+
+from secshare import SecShare
 
 class Manager():
 
@@ -30,7 +30,7 @@ class Manager():
         Public key for encryption.
     skenc : dict
         Secret key for encryption.
-    deltas : list[int]
+    deltas : dict[int]
         Delta coefficients.
     """
 
@@ -109,14 +109,15 @@ class Manager():
         x : int
             Point where the polinomial crosses the x axis.
         """
-        deltas = [0]
-        for i in range(1, self.n):
-            deltas.append(randint(1, q) % q)
-            deltas[0] -= deltas[i] * (x ** i)
-        deltas[0] %= q
+        # Required k managers for the protocol
+        deltas = {1: 0}
+        for i in range(2, self.n + 1):
+            deltas[i] = randint(1, q-1)
+            deltas[1] -= deltas[i] * (x ** i)
+        deltas[1] %= q
         self.deltas = deltas
 
-    def pub_deltas(self, id: int, mgr_pk: list) -> list:
+    def pub_deltas(self, id: int, mgr_pk: dict) -> list:
         """
         Publish the delta coefficients
 
@@ -135,13 +136,13 @@ class Manager():
         deltas = []
         for i in range(1, self.n + 1):
             if i != id:
-                pkt = self.encrypt(self.deltas[i-1], mgr_pk[i-1])
+                pkt = self.encrypt(self.deltas[i], mgr_pk[i])
             else:
                 pkt = 0
             deltas.append(pkt)
         return deltas
 
-    def comp_shares(self, deltas: dict, id: int) -> list:
+    def comp_shares(self, deltas: dict, r_pk: dict, id: int, q: int) -> list:
         """
         Calculates the shares of the new manager's secret key
 
@@ -164,4 +165,21 @@ class Manager():
                 dec_delta = self.decrypt(deltas[i][self.id - 1])
                 x_prime += dec_delta
                 gamma_prime += dec_delta
-        return (x_prime, gamma_prime)
+        x_prime = int(x_prime) % q
+        gamma_prime = int(gamma_prime) % q
+        x_enc = self.encrypt(x_prime, r_pk)
+        gamma_enc = self.encrypt(gamma_prime, r_pk)
+        return (x_enc, gamma_enc)
+
+    def reconstruct(self, x_shares: list, gamma_shares: list, ss: SecShare, q: int):
+        x_dec = {}
+        gamma_dec = {}
+        for i in x_shares.keys():
+            x_dec[i] = self.decrypt(x_shares[i])
+            gamma_dec[i] = self.decrypt(gamma_shares[i])
+        x = ss.reconstruct_d(x_dec, self.id, q)
+        gamma = ss.reconstruct_d(gamma_dec, self.id, q)
+
+        # TODO: Check reconstruction index
+        print(f"x_rec      : {x}")
+        print(f"gamma_rec  : {gamma}")
