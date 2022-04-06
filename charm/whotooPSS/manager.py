@@ -52,6 +52,8 @@ class Manager():
         self.beaver = None
         self.gen = []
         self.deltas = []
+        self.epsilons = {}
+        self.time_step = 0
 
     def get_pkenc(self) -> dict:
         """
@@ -100,24 +102,48 @@ class Manager():
         rm = self.enc.decrypt(self.pkenc, self.skenc, cph)
         return int(rm.decode('utf-8'))
 
-    def gen_delta(self, x: int, q: int):
+    def gen_delta(self, x: int, k: int, q: int):
         """
         Computes delta coefficients so the polinomial crosses at x
         
         Parameters
         ----------
         x : int
-            Point where the polinomial crosses the x axis.
+            Point where the polynomial crosses the x axis.
+        k : int
+            Degree of the polinomial.
+        q : int
+            Order of the group.
         """
         # Required k managers for the protocol
-        deltas = {1: 0}
-        for i in range(2, self.n + 1):
+        deltas = [0] * k
+        for i in range(1, k):
             deltas[i] = randint(1, q-1)
-            deltas[1] -= deltas[i] * (x ** i)
+            deltas[0] -= deltas[i] * (x ** i)
         deltas[1] %= q
         self.deltas = deltas
 
-    def pub_deltas(self, id: int, mgr_pk: dict) -> list:
+    def eval_d(self, x: int) -> int:
+        """
+        Evaluation of the delta polynomial at x
+
+        Parameters
+        ----------
+        x : int
+            Evaluation point.
+
+        Returns
+        -------
+        int
+            Evaluation result.
+        """
+        result = 0
+        k = len(self.deltas)
+        for i in range(0, k):
+            result += self.deltas[i] * (x ** i)
+        return result
+
+    def pub_evals_rec(self, id: int, mgr_pk: dict) -> list:
         """
         Publish the delta coefficients
 
@@ -133,16 +159,16 @@ class Manager():
         list[dict]
             Encrypted delta coefficients.
         """
-        deltas = []
+        evals = {}
         for i in range(1, self.n + 1):
             if i != id:
-                pkt = self.encrypt(self.deltas[i], mgr_pk[i])
+                pkt = self.encrypt(self.eval_d(i), mgr_pk[i])
             else:
                 pkt = 0
-            deltas.append(pkt)
-        return deltas
+            evals[i] = pkt
+        return evals
 
-    def comp_shares(self, deltas: dict, r_pk: dict, id: int, q: int) -> list:
+    def comp_shares(self, evals: dict, r_pk: dict, id: int, q: int) -> list:
         """
         Calculates the shares of the new manager's secret key
 
@@ -155,14 +181,14 @@ class Manager():
 
         Returns
         -------
-        list[pairing.Element]
-            Share of the new manager's secret key
+        list[dict]
+            Encrypted share of the new manager's secret key.
         """
         x_prime = self.skeg_share
         gamma_prime = self.skbbs_share
         for i in range(1, self.n + 1):
             if i != id:
-                dec_delta = self.decrypt(deltas[i][self.id - 1])
+                dec_delta = self.decrypt(evals[i][self.id])
                 x_prime += dec_delta
                 gamma_prime += dec_delta
         x_prime = int(x_prime) % q
@@ -183,3 +209,20 @@ class Manager():
         # TODO: Check reconstruction index
         print(f"x_rec      : {x}")
         print(f"gamma_rec  : {gamma}")
+
+        self.skeg_share = x
+        self.skbbs_share = gamma
+
+    def gen_epsilon(self, g):
+        k = len(self.deltas)
+        for i in range(0, k):
+            self.epsilons[i] = g ** self.deltas[i]
+
+    def pub_evals_upd(self, mgr_pk: dict) -> dict:
+        e = {}
+        for i in mgr_pk.keys():
+            e[i] = self.encrypt(self.eval_d(i), mgr_pk[i])
+
+        self.time_step += 1
+        #TODO: Add signature
+        return {"id": self.id, "time": self.time_step, "epsilons": self.epsilons, "e": e}

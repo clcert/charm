@@ -172,20 +172,20 @@ class WhoTooPSS():
             New manager to be included.
         """
         mgr.beaver = self.managers[id].beaver
-        deltas = {}
+        evals = {}
         ord = self.group.order()
 
         for p in self.managers:
             if p.id != id:
-                p.gen_delta(id, ord)
-                deltas[p.id] = p.pub_deltas(id, self.mgr_pk)
+                p.gen_delta(id, self.k, ord)
+                evals[p.id] = p.pub_evals_rec(id, self.mgr_pk)
 
         x_shares = {}
         gamma_shares = {}
 
         for p in self.managers:
             if p.id != id:
-                xi, gammai = p.comp_shares(deltas, mgr.get_pkenc(), id, ord)
+                xi, gammai = p.comp_shares(evals, mgr.get_pkenc(), id, ord)
                 x_shares[self.group.init(ZR, p.id)] = xi
                 gamma_shares[self.group.init(ZR, p.id)] = gammai
 
@@ -195,8 +195,22 @@ class WhoTooPSS():
         print(f"x_orig     : {self.managers[id].skeg_share}")
         print(f"gamma_orig : {self.managers[id].skbbs_share}")
 
+        self.managers[id] = mgr
+
     def update(self):
-        pass
+        """
+        Update the shares of the managers' secret keys
+
+        Parameters
+        ----------
+        """
+        ord = self.group.order()
+        enc_u = {}
+
+        for p in self.managers:
+            p.gen_delta(0, self.k, ord)
+            p.gen_epsilon(self.g1)
+            enc_u[p.id] = p.pub_evals_upd(self.mgr_pk)
 
     def sign(self, user: User, msg: str) -> "tuple[tuple]":
         """

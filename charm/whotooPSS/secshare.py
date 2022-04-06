@@ -74,11 +74,9 @@ class SecShare():
 
 	def reconstruct_d(self, shares, x, q):
 		list = shares.keys()
-		#coeff = self.ss.recoverCoefficients(list)
 		coeff = self.recover_coeff(list, x)
 		secret = 0
 		for i in list:
-			#secret += (coeff[i] * self.group.init(ZR, shares[i]))
 			secret += (int(coeff[i]) * shares[i]) % q
 		return secret
 

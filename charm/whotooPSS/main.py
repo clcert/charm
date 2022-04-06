@@ -29,6 +29,5 @@ print(whotoo.managers[2].decrypt(c))
 
 rpc = 3
 mgr = Manager(rpc, n, whotoo.enc)
-print(whotoo.managers[rpc])
 whotoo.recover(rpc, mgr)
-print(whotoo.managers[rpc])
+whotoo.update()
