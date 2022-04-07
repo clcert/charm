@@ -28,6 +28,6 @@ c = whotoo.managers[1].encrypt(12345, whotoo.managers[2].get_pkenc())
 print(whotoo.managers[2].decrypt(c))
 
 rpc = 3
-mgr = Manager(rpc, n, whotoo.enc)
+mgr = Manager(rpc, n)
 whotoo.recover(rpc, mgr)
 whotoo.update()

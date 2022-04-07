@@ -95,7 +95,6 @@ class WhoTooPSS():
         self.k = k
         self.n = n
 
-        self.enc = RSA_Enc()
         self.eg = ElGamal(self.group)
         self.sec_share = SecShare(self.group, self.g1, self.g2, self.k, self.n, self.eg)
         self.sec_share.h = self.group.random(G1) #temp
@@ -112,7 +111,7 @@ class WhoTooPSS():
         #initialize managers
         self.managers = []
         for i in range(1, n+1):
-            man = Manager(i, n, self.enc)
+            man = Manager(i, n)
             man.beaver = (wa[i][0], wb[i][0], wc[i][0])
             self.managers.append(man)
             self.mgr_pk[i] = man.get_pkenc()
@@ -211,6 +210,17 @@ class WhoTooPSS():
             p.gen_delta(0, self.k, ord)
             p.gen_epsilon(self.g1)
             enc_u[p.id] = p.pub_evals_upd(self.mgr_pk)
+
+        for p in self.managers:
+            if not p.verify_sigs(enc_u, self.mgr_pk):
+                print("Found invalid signature, interrupting process")
+                return
+            if not p.verify_upd(enc_u, self.g1):
+                print("Packet contents are inconsistent, interrupting process")
+                return
+
+        for p in self.managers:
+            p.update_shares(enc_u)
 
     def sign(self, user: User, msg: str) -> "tuple[tuple]":
         """

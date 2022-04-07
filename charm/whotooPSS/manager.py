@@ -1,4 +1,9 @@
 from charm.schemes.pkenc.pkenc_rsa import RSA_Enc
+from charm.schemes.pksig.pksig_rsa_hw09 import (
+    SHA1,
+    Sig_RSA_Stateless_HW09
+)
+from json import dumps
 from random import randint
 
 from secshare import SecShare
@@ -34,14 +39,16 @@ class Manager():
         Delta coefficients.
     """
 
-    def __init__(self, id: int, n: int, enc: RSA_Enc):
+    def __init__(self, id: int, n: int):
         self.id = id
         self.n = n
         self.da_shares = [0] * n
         self.skeg_share = None
         self.skbbs_share = None
-        self.enc = enc
-        (self.pkenc, self.skenc) = enc.keygen()
+        self.enc = RSA_Enc()
+        (self.pkenc, self.skenc) = self.enc.keygen()
+        self.sig = Sig_RSA_Stateless_HW09()
+        (self.pksig, self.sksig) = self.sig.keygen()
         self.temp1 = None
         self.temp2 = None
         self.temp3 = None
@@ -101,6 +108,43 @@ class Manager():
         """
         rm = self.enc.decrypt(self.pkenc, self.skenc, cph)
         return int(rm.decode('utf-8'))
+
+    def sign(self, msg: str) -> dict:
+        """
+        Signs a string
+
+        Parameters
+        ----------
+        msg : str
+            Message to be signed.
+        
+        Returns
+        -------
+        dict
+            Signature of the message.
+        """
+        h = SHA1(bytes(msg, 'utf-8'))
+        self.sig.sign(self.pksig, self.sksig, h)
+
+    def verify(self, spk: dict, msg: str, sgn: str) -> bool:
+        """
+        Verifies a signature
+
+        Parameters
+        ----------
+        spk : dict
+            Signer's public key.
+        msg : str
+            Signed message.
+        sgn : str
+            Sirgnature of the message.
+
+        Returns
+        -------
+        bool
+            True if the siganture is valid
+        """
+        return self.sig.verify(spk, msg, sgn)
 
     def gen_delta(self, x: int, k: int, q: int):
         """
@@ -215,8 +259,8 @@ class Manager():
 
     def gen_epsilon(self, g):
         k = len(self.deltas)
-        for i in range(0, k):
-            self.epsilons[i] = g ** self.deltas[i]
+        for m in range(0, k):
+            self.epsilons[m] = g ** self.deltas[m]
 
     def pub_evals_upd(self, mgr_pk: dict) -> dict:
         e = {}
@@ -225,4 +269,72 @@ class Manager():
 
         self.time_step += 1
         #TODO: Add signature
-        return {"id": self.id, "time": self.time_step, "epsilons": self.epsilons, "e": e}
+        v = {"id": self.id, "time": self.time_step, "epsilons": self.epsilons, "e": e}
+        vs = v
+
+        for i in vs["epsilons"].keys():
+            vs["epsilons"][i] = str(vs["epsilons"][i])
+
+        for i in vs["e"].keys():
+            vs["e"][i] = str(vs["e"][i])
+        
+        vjson = dumps(vs)
+        #TODO: optimize signature
+        sigma = "" #self.sign(vjson)
+
+        return (v, sigma)
+
+    def verify_sigs(self, evals: dict, mgr_pk: dict) -> bool:
+        """
+        Verifies the signatures of the update packets
+
+        Parameters
+        ----------
+        evals : dict
+            Update packets commited by all managers.
+
+        Returns
+        -------
+        bool
+            True if every signature is verified.
+        """
+        result = True
+        for i in evals.keys():
+            #TODO: optimize signature
+            result = result and True #self.verify(mgr_pk[i], evals[i][0], evals[i][1])
+
+        return result
+
+    def verify_upd(self, evals: dict, g1) -> bool:
+        """
+        Verifies the correctness of the update packet contents
+
+        Parameters
+        ----------
+        evals : dict
+            Update packets commited by all managers.
+        g1 : :py:class:`pairing.Element`
+            G1 of the pairing group.
+
+        Returns
+        -------
+        bool
+            True if the contents of the packets are consistent.
+        """
+        result = True
+        for j in evals.keys():
+            if j == self.id:
+                pkt = evals[j][0]
+                u = self.decrypt(pkt["e"][self.id])
+                prod = 1
+                for m in pkt["epsilons"].keys():
+                    prod *= (pkt["epsilons"][m] ** (self.id ** m))
+                result = result and (g1 ** u == prod)
+        
+        return result
+
+    def update_shares(self, evals: dict):
+        for j in evals.keys():
+            u = self.decrypt(evals[j][0]["e"][self.id])
+            self.skeg_share += u
+            self.skbbs_share += u
