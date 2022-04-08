@@ -3,8 +3,8 @@ from charm.schemes.pksig.pksig_rsa_hw09 import (
     SHA1,
     Sig_RSA_Stateless_HW09
 )
+from charm.toolbox.pairinggroup import ZR
 from json import dumps
-from random import randint
 
 from secshare import SecShare
 
@@ -146,7 +146,7 @@ class Manager():
         """
         return self.sig.verify(spk, msg, sgn)
 
-    def gen_delta(self, x: int, k: int, q: int):
+    def gen_delta(self, x: int, k: int, group):
         """
         Computes delta coefficients so the polinomial crosses at x
         
@@ -156,15 +156,15 @@ class Manager():
             Point where the polynomial crosses the x axis.
         k : int
             Degree of the polinomial.
-        q : int
-            Order of the group.
+        group : PairingGroup
+            Pairing group.
         """
         # Required k managers for the protocol
         deltas = [0] * k
         for i in range(1, k):
-            deltas[i] = randint(1, q-1)
+            deltas[i] = group.random(ZR)
             deltas[0] -= deltas[i] * (x ** i)
-        deltas[1] %= q
+        deltas[0] = group.init(ZR, deltas[0])
         self.deltas = deltas
 
     def eval_d(self, x: int) -> int:
@@ -212,16 +212,20 @@ class Manager():
             evals[i] = pkt
         return evals
 
-    def comp_shares(self, evals: dict, r_pk: dict, id: int, q: int) -> list:
+    def comp_shares(self, evals: dict, r_pk: dict, id: int, q) -> list:
         """
         Calculates the shares of the new manager's secret key
 
         Parameters
         ----------
-        deltas : dict[list[bytes]]
-            Encryption of the delta coeffcients published by all managers.
+        evals : dict[list[bytes]]
+            Encryption of the delta evaluations published by all managers.
+        r_pk : dict
+            Public key of the manager being replaced.
         id : int
-            Identity of the manager beeing replaced.
+            Identity of the manager being replaced.
+        group : PairingGroup
+            Pairing group.
 
         Returns
         -------
@@ -241,14 +245,14 @@ class Manager():
         gamma_enc = self.encrypt(gamma_prime, r_pk)
         return (x_enc, gamma_enc)
 
-    def reconstruct(self, x_shares: list, gamma_shares: list, ss: SecShare, q: int):
+    def reconstruct(self, x_shares: list, gamma_shares: list, ss: SecShare, q, k: int):
         x_dec = {}
         gamma_dec = {}
         for i in x_shares.keys():
             x_dec[i] = self.decrypt(x_shares[i])
             gamma_dec[i] = self.decrypt(gamma_shares[i])
-        x = ss.reconstruct_d(x_dec, self.id, q)
-        gamma = ss.reconstruct_d(gamma_dec, self.id, q)
+        x = ss.reconstruct_d(x_dec, self.id, q, k)
+        gamma = ss.reconstruct_d(gamma_dec, self.id, q, k)
 
         # TODO: Check reconstruction index
         print(f"x_rec      : {x}")
@@ -335,6 +339,7 @@ class Manager():
 
     def update_shares(self, evals: dict):
         for j in evals.keys():
+            continue
             u = self.decrypt(evals[j][0]["e"][self.id])
             self.skeg_share += u
             self.skbbs_share += u

@@ -172,23 +172,23 @@ class WhoTooPSS():
         """
         mgr.beaver = self.managers[id].beaver
         evals = {}
-        ord = self.group.order()
 
         for p in self.managers:
             if p.id != id:
-                p.gen_delta(id, self.k, ord)
+                p.gen_delta(id, self.k, self.group)
                 evals[p.id] = p.pub_evals_rec(id, self.mgr_pk)
 
+        q = self.group.order()
         x_shares = {}
         gamma_shares = {}
 
         for p in self.managers:
             if p.id != id:
-                xi, gammai = p.comp_shares(evals, mgr.get_pkenc(), id, ord)
+                xi, gammai = p.comp_shares(evals, mgr.get_pkenc(), id, q)
                 x_shares[self.group.init(ZR, p.id)] = xi
                 gamma_shares[self.group.init(ZR, p.id)] = gammai
 
-        mgr.reconstruct(x_shares, gamma_shares, self.sec_share, ord)
+        mgr.reconstruct(x_shares, gamma_shares, self.sec_share, q, self.k)
 
         # TODO: Check reconstruction index
         print(f"x_orig     : {self.managers[id].skeg_share}")
@@ -203,11 +203,10 @@ class WhoTooPSS():
         Parameters
         ----------
         """
-        ord = self.group.order()
         enc_u = {}
 
         for p in self.managers:
-            p.gen_delta(0, self.k, ord)
+            p.gen_delta(0, self.k, self.group)
             p.gen_epsilon(self.g1)
             enc_u[p.id] = p.pub_evals_upd(self.mgr_pk)
 
@@ -215,9 +214,9 @@ class WhoTooPSS():
             if not p.verify_sigs(enc_u, self.mgr_pk):
                 print("Found invalid signature, interrupting process")
                 return
-            if not p.verify_upd(enc_u, self.g1):
-                print("Packet contents are inconsistent, interrupting process")
-                return
+            #if not p.verify_upd(enc_u, self.g1):
+                #print("Packet contents are inconsistent, interrupting process")
+                #return
 
         for p in self.managers:
             p.update_shares(enc_u)

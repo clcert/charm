@@ -72,23 +72,24 @@ class SecShare():
 	def reconstruct(self, shares):
 		return self.ss.recoverSecret(shares)
 
-	def reconstruct_d(self, shares, x, q):
-		list = shares.keys()
-		coeff = self.recover_coeff(list, x)
+	def reconstruct_d(self, shares, x, q, k):
+		lst = shares.keys()
+		lst = list(lst)[:k+1]
+		coeff = self.recover_coeff(lst, x, q)
 		secret = 0
-		for i in list:
+		for i in lst:
 			secret += (int(coeff[i]) * shares[i]) % q
-		return secret
+		return secret % q
 
-	def recover_coeff(self, list, x):
+	def recover_coeff(self, lst, x, q):
 		coeff = {}
-		for i in list:
+		for i in lst:
 			result = 1
-			for j in list:
+			for j in lst:
 				if not (i == j):
 					# lagrange basis poly
 					result *= (x - j) / (i - j)
-			coeff[i] = result
+			coeff[i] = int(result) % q
 		return coeff
 
 	def share_encode(self, s):
