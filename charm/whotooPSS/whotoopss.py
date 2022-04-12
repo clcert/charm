@@ -87,6 +87,7 @@ class WhoTooPSS():
 
         self.users = []
         self.mgr_pk = {}
+        self.mgr_vk = {}
         self.id_map = {}
         
         self.g1 = self.group.random(G1)
@@ -115,6 +116,7 @@ class WhoTooPSS():
             man.beaver = (wa[i][0], wb[i][0], wc[i][0])
             self.managers.append(man)
             self.mgr_pk[i] = man.get_pkenc()
+            self.mgr_vk[i] = man.get_pksig()
 
         self.sec_share.managers = self.managers
 
@@ -211,12 +213,14 @@ class WhoTooPSS():
             enc_u[p.id] = p.pub_evals_upd(self.mgr_pk)
 
         for p in self.managers:
-            if not p.verify_sigs(enc_u, self.mgr_pk):
+            #TODO: fix forging error
+            if not p.verify_sigs(enc_u, self.mgr_vk):
                 print("Found invalid signature, interrupting process")
                 return
-            #if not p.verify_upd(enc_u, self.g1):
-                #print("Packet contents are inconsistent, interrupting process")
-                #return
+            #TODO: fix e decryption error
+            if not p.verify_upd(enc_u, self.g1):
+                print("Packet contents are inconsistent, interrupting process")
+                return
 
         for p in self.managers:
             p.update_shares(enc_u)

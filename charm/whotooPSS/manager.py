@@ -1,10 +1,10 @@
 from charm.schemes.pkenc.pkenc_rsa import RSA_Enc
-from charm.schemes.pksig.pksig_rsa_hw09 import (
-    SHA1,
-    Sig_RSA_Stateless_HW09
-)
 from charm.toolbox.pairinggroup import ZR
 from json import dumps
+from nacl.signing import (
+    SigningKey,
+    VerifyKey
+)
 
 from secshare import SecShare
 
@@ -47,8 +47,7 @@ class Manager():
         self.skbbs_share = None
         self.enc = RSA_Enc()
         (self.pkenc, self.skenc) = self.enc.keygen()
-        self.sig = Sig_RSA_Stateless_HW09()
-        (self.pksig, self.sksig) = self.sig.keygen()
+        self.sig = SigningKey.generate()
         self.temp1 = None
         self.temp2 = None
         self.temp3 = None
@@ -72,6 +71,16 @@ class Manager():
             Manager's public key
         """
         return self.pkenc
+
+    def get_pksig(self):
+        """
+        Get the managers signing public key
+        
+        Returns
+        -------
+            Manager's signing key
+        """
+        return self.sig.verify_key.encode()
 
     def encrypt(self, msg: int, rpk: dict) -> dict:
         """
@@ -123,10 +132,10 @@ class Manager():
         dict
             Signature of the message.
         """
-        h = SHA1(bytes(msg, 'utf-8'))
-        self.sig.sign(self.pksig, self.sksig, h)
+        m = bytes(msg, 'utf-8')
+        return self.sig.sign(m)
 
-    def verify(self, spk: dict, msg: str, sgn: str) -> bool:
+    def verify(self, spk, sigma) -> bool:
         """
         Verifies a signature
 
@@ -144,7 +153,8 @@ class Manager():
         bool
             True if the siganture is valid
         """
-        return self.sig.verify(spk, msg, sgn)
+        ver = VerifyKey(spk)
+        return ver.verify(sigma)
 
     def gen_delta(self, x: int, k: int, group):
         """
@@ -272,7 +282,7 @@ class Manager():
             e[i] = self.encrypt(self.eval_d(i), mgr_pk[i])
 
         self.time_step += 1
-        #TODO: Add signature
+        
         v = {"id": self.id, "time": self.time_step, "epsilons": self.epsilons, "e": e}
         vs = v
 
@@ -283,12 +293,11 @@ class Manager():
             vs["e"][i] = str(vs["e"][i])
         
         vjson = dumps(vs)
-        #TODO: optimize signature
-        sigma = "" #self.sign(vjson)
+        sigma = self.sign(vjson)
 
         return (v, sigma)
 
-    def verify_sigs(self, evals: dict, mgr_pk: dict) -> bool:
+    def verify_sigs(self, evals: dict, mgr_vk: dict) -> bool:
         """
         Verifies the signatures of the update packets
 
@@ -304,8 +313,8 @@ class Manager():
         """
         result = True
         for i in evals.keys():
-            #TODO: optimize signature
-            result = result and True #self.verify(mgr_pk[i], evals[i][0], evals[i][1])
+            #TODO: fix forging error
+            result = result and self.verify(mgr_vk[i], evals[i][1])
 
         return result
 
@@ -339,7 +348,6 @@ class Manager():
 
     def update_shares(self, evals: dict):
         for j in evals.keys():
-            continue
             u = self.decrypt(evals[j][0]["e"][self.id])
             self.skeg_share += u
             self.skbbs_share += u
