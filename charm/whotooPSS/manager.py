@@ -1,10 +1,16 @@
-from charm.schemes.pkenc.pkenc_rsa import RSA_Enc
 from charm.toolbox.pairinggroup import ZR
 from json import dumps
 from nacl.signing import (
+    SignedMessage,
     SigningKey,
     VerifyKey
 )
+from nacl.public import (
+    Box,
+    PrivateKey,
+    PublicKey
+)
+from nacl.utils import EncryptedMessage
 
 from secshare import SecShare
 
@@ -24,19 +30,21 @@ class Manager():
     n : int
         Total number of managers.
     da_shares : list[:py:class:`pairing.Element`]
-        Shares of distributed authority commitment.
+        Shares of user private key
     skeg_share : :py:class:`pairing.Element`
         Share of ElGamal secret key.
     skbbs_share : :py:class:`pairing.Element`
         Share of BBS secret key.
-    enc : :py:class:`charm.schemes.pkenc.pkenc_cs98.CS98`
-        Public key encryption scheme.
-    pkenc : dict
-        Public key for encryption.
-    skenc : dict
-        Secret key for encryption.
-    deltas : dict[int]
-        Delta coefficients.
+    skenc : :py:class:`nacl.public.PrivateKey`
+        Secret key for encryption scheme.
+    sksig : :py:class:`nacl.signing.SigningKey`
+        Secret key for signing scheme.
+    deltas : list[int]
+        Coefficients of delta polynomial.
+    epsilon : dict[int -> :py:class:`pairing.Element`]
+        Commitments to delta coefficients
+    time_step : int
+        Current timestep of the scheme.
     """
 
     def __init__(self, id: int, n: int):
@@ -45,9 +53,12 @@ class Manager():
         self.da_shares = [0] * n
         self.skeg_share = None
         self.skbbs_share = None
-        self.enc = RSA_Enc()
-        (self.pkenc, self.skenc) = self.enc.keygen()
-        self.sig = SigningKey.generate()
+        self.skenc = PrivateKey.generate()
+        self.sksig = SigningKey.generate()
+        self.deltas = []
+        self.epsilons = {}
+        self.time_step = 0
+
         self.temp1 = None
         self.temp2 = None
         self.temp3 = None
@@ -57,32 +68,31 @@ class Manager():
         self.temp7 = None
         self.beaver = None
         self.gen = []
-        self.deltas = []
-        self.epsilons = {}
-        self.time_step = 0
 
-    def get_pkenc(self) -> dict:
+
+    def get_pkenc(self) -> PublicKey:
         """
         Gets the managers encryption public key
 
         Returns
         -------
-        dict
+        :py:class:`nacl.public.PublicKey`
             Manager's public key
         """
-        return self.pkenc
+        return self.skenc.public_key
 
-    def get_pksig(self):
+    def get_pksig(self) -> bytes:
         """
         Get the managers signing public key
         
         Returns
         -------
+        bytes
             Manager's signing key
         """
-        return self.sig.verify_key.encode()
+        return self.sksig.verify_key.encode()
 
-    def encrypt(self, msg: int, rpk: dict) -> dict:
+    def encrypt(self, msg: int, rpk: PublicKey) -> EncryptedMessage:
         """
         Encrypts a message for the specified recipient
 
@@ -90,35 +100,39 @@ class Manager():
         ----------
         msg : int
             Message to be encrypted.
-        rpk : int
+        rpk : :py:class:`nacl.public.PublicKey`
             Recipient's public key.
 
         Returns
         -------
-        dict
+        :py:class:`nacl.utils.EncryptedMessage`
             Encryption of the message.
         """
+        b = Box(self.skenc, rpk)
         m = bytes(str(msg), 'utf-8')
-        return self.enc.encrypt(rpk, m)
+        return b.encrypt(m)
 
-    def decrypt(self, cph: dict) -> int:
+    def decrypt(self, cph: EncryptedMessage, spk: PublicKey) -> int:
         """
         Decrypts a message intended to the manager
 
         Parameters
         ----------
-        cph : dict
+        cph : :py:class:`nacl.utils.EncryptedMessage`
             Ciphertext.
+        spk : :py:class:`nacl.public.PublicKey`
+            Sender's public key.
 
         Returns
         -------
         int
             Decrypted message.
         """
-        rm = self.enc.decrypt(self.pkenc, self.skenc, cph)
+        b = Box(self.skenc, spk)
+        rm = b.decrypt(cph)
         return int(rm.decode('utf-8'))
 
-    def sign(self, msg: str) -> dict:
+    def sign(self, msg: str) -> SignedMessage:
         """
         Signs a string
 
@@ -129,11 +143,11 @@ class Manager():
         
         Returns
         -------
-        dict
+        :py:class:`nacl.signing.SignedMessage`
             Signature of the message.
         """
         m = bytes(msg, 'utf-8')
-        return self.sig.sign(m)
+        return self.sksig.sign(m)
 
     def verify(self, spk, sigma) -> bool:
         """
@@ -222,7 +236,7 @@ class Manager():
             evals[i] = pkt
         return evals
 
-    def comp_shares(self, evals: dict, r_pk: dict, id: int, q) -> list:
+    def comp_shares(self, evals: dict, mgr_pk: dict, r_pk: PublicKey, r: int, q) -> list:
         """
         Calculates the shares of the new manager's secret key
 
@@ -230,9 +244,11 @@ class Manager():
         ----------
         evals : dict[list[bytes]]
             Encryption of the delta evaluations published by all managers.
-        r_pk : dict
-            Public key of the manager being replaced.
-        id : int
+        mgr_pk : dict[:py:class:`nacl.public.PublicKey`]
+            Public keys of the managers.
+        r_pk : :py:class:`nacl.public.PublicKey`
+            Public key of the new manager.
+        r : int
             Identity of the manager being replaced.
         group : PairingGroup
             Pairing group.
@@ -244,23 +260,30 @@ class Manager():
         """
         x_prime = self.skeg_share
         gamma_prime = self.skbbs_share
+
         for i in range(1, self.n + 1):
-            if i != id:
-                dec_delta = self.decrypt(evals[i][self.id])
+            if i != r:
+                dec_delta = self.decrypt(evals[i][self.id], mgr_pk[i])
                 x_prime += dec_delta
                 gamma_prime += dec_delta
+
         x_prime = int(x_prime) % q
         gamma_prime = int(gamma_prime) % q
+
         x_enc = self.encrypt(x_prime, r_pk)
         gamma_enc = self.encrypt(gamma_prime, r_pk)
+
         return (x_enc, gamma_enc)
 
-    def reconstruct(self, x_shares: list, gamma_shares: list, ss: SecShare, q, k: int):
+    def reconstruct(self, x_shares: list, gamma_shares: list, mgr_pk: dict, ss: SecShare, q, k: int):
         x_dec = {}
         gamma_dec = {}
+
         for i in x_shares.keys():
-            x_dec[i] = self.decrypt(x_shares[i])
-            gamma_dec[i] = self.decrypt(gamma_shares[i])
+            pk = mgr_pk[i]
+            x_dec[i] = self.decrypt(x_shares[i], pk)
+            gamma_dec[i] = self.decrypt(gamma_shares[i], pk)
+
         x = ss.reconstruct_d(x_dec, self.id, q, k)
         gamma = ss.reconstruct_d(gamma_dec, self.id, q, k)
 
@@ -280,11 +303,9 @@ class Manager():
         e = {}
         for i in mgr_pk.keys():
             e[i] = self.encrypt(self.eval_d(i), mgr_pk[i])
-
-        self.time_step += 1
         
-        v = {"id": self.id, "time": self.time_step, "epsilons": self.epsilons, "e": e}
-        vs = v
+        v = {"id": self.id, "time": self.time_step + 1, "epsilons": self.epsilons.copy(), "e": e.copy()}
+        vs = {"id": self.id, "time": self.time_step + 1, "epsilons": self.epsilons.copy(), "e": e.copy()}
 
         for i in vs["epsilons"].keys():
             vs["epsilons"][i] = str(vs["epsilons"][i])
@@ -313,12 +334,13 @@ class Manager():
         """
         result = True
         for i in evals.keys():
-            #TODO: fix forging error
-            result = result and self.verify(mgr_vk[i], evals[i][1])
-
+            try:
+                result = result and self.verify(mgr_vk[i], evals[i][1])
+            except:
+                return False
         return result
 
-    def verify_upd(self, evals: dict, g1) -> bool:
+    def verify_upd(self, evals: dict, mgr_pk: dict, g1) -> bool:
         """
         Verifies the correctness of the update packet contents
 
@@ -336,9 +358,9 @@ class Manager():
         """
         result = True
         for j in evals.keys():
-            if j == self.id:
+            if j != self.id:
                 pkt = evals[j][0]
-                u = self.decrypt(pkt["e"][self.id])
+                u = self.decrypt(pkt["e"][self.id], mgr_pk[j])
                 prod = 1
                 for m in pkt["epsilons"].keys():
                     prod *= (pkt["epsilons"][m] ** (self.id ** m))
@@ -346,8 +368,10 @@ class Manager():
         
         return result
 
-    def update_shares(self, evals: dict):
+    def update_shares(self, evals: dict, mgr_pk: dict):
         for j in evals.keys():
-            u = self.decrypt(evals[j][0]["e"][self.id])
+            u = self.decrypt(evals[j][0]["e"][self.id], mgr_pk[j])
             self.skeg_share += u
             self.skbbs_share += u
+
+        self.time_step += 1

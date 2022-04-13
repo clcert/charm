@@ -25,7 +25,7 @@ else:
     print(f"Accuser identified as {id}")
 
 c = whotoo.managers[1].encrypt(12345, whotoo.managers[2].get_pkenc())
-print(whotoo.managers[2].decrypt(c))
+print(whotoo.managers[2].decrypt(c, whotoo.managers[1].get_pkenc()))
 
 rpc = 3
 mgr = Manager(rpc, n)

@@ -117,7 +117,7 @@ class WhoTooPSS():
             self.managers.append(man)
             self.mgr_pk[i] = man.get_pkenc()
             self.mgr_vk[i] = man.get_pksig()
-
+        
         self.sec_share.managers = self.managers
 
         #initialize ElGamal keys
@@ -172,7 +172,7 @@ class WhoTooPSS():
         mgr : :py:class:`util.Manager`
             New manager to be included.
         """
-        mgr.beaver = self.managers[id].beaver
+        mgr.beaver = self.managers[id-1].beaver
         evals = {}
 
         for p in self.managers:
@@ -186,17 +186,19 @@ class WhoTooPSS():
 
         for p in self.managers:
             if p.id != id:
-                xi, gammai = p.comp_shares(evals, mgr.get_pkenc(), id, q)
-                x_shares[self.group.init(ZR, p.id)] = xi
-                gamma_shares[self.group.init(ZR, p.id)] = gammai
+                xi, gammai = p.comp_shares(evals, self.mgr_pk, mgr.get_pkenc(), id, q)
+                x_shares[p.id] = xi
+                gamma_shares[p.id] = gammai
 
-        mgr.reconstruct(x_shares, gamma_shares, self.sec_share, q, self.k)
+        mgr.reconstruct(x_shares, gamma_shares, self.mgr_pk, self.sec_share, q, self.k)
 
         # TODO: Check reconstruction index
-        print(f"x_orig     : {self.managers[id].skeg_share}")
-        print(f"gamma_orig : {self.managers[id].skbbs_share}")
+        print(f"x_orig     : {self.managers[id-1].skeg_share}")
+        print(f"gamma_orig : {self.managers[id-1].skbbs_share}")
 
-        self.managers[id] = mgr
+        self.managers[id-1] = mgr
+        self.mgr_pk[id] = mgr.get_pkenc()
+        self.mgr_vk[id] = mgr.get_pksig()
 
     def update(self):
         """
@@ -213,17 +215,16 @@ class WhoTooPSS():
             enc_u[p.id] = p.pub_evals_upd(self.mgr_pk)
 
         for p in self.managers:
-            #TODO: fix forging error
             if not p.verify_sigs(enc_u, self.mgr_vk):
-                print("Found invalid signature, interrupting process")
+                print("Found invalid signature, interrupting process...")
                 return
-            #TODO: fix e decryption error
-            if not p.verify_upd(enc_u, self.g1):
+
+            if not p.verify_upd(enc_u, self.mgr_pk, self.g1):
                 print("Packet contents are inconsistent, interrupting process")
                 return
 
         for p in self.managers:
-            p.update_shares(enc_u)
+            p.update_shares(enc_u, self.mgr_pk)
 
     def sign(self, user: User, msg: str) -> "tuple[tuple]":
         """

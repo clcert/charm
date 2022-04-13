@@ -14,7 +14,10 @@ from random import randint
 from charm.toolbox.pairinggroup import ZR
 
 def f(x: int) -> int:
-    return x + 2 * (x ** 2) + 3 * (x ** 3) + 4 * (x ** 4)
+    res = x
+    for i in range(2, k + 1):
+        res += i * (x ** i)
+    return res
 
 def d(x: int, coefs: dict) -> int:
     res = 0
@@ -30,21 +33,15 @@ print(f"f : {shares}")
 
 q = whotoo.group.order()
 
-sec = whotoo.sec_share.reconstruct_d(shares, 0, q, 4)
-print(f" 0 : {sec}")
-sec = whotoo.sec_share.reconstruct_d(shares, 4, q, 4)
-print(f" 4 : {sec}")
-sec = whotoo.sec_share.reconstruct_d(shares, 5, q, 4)
-print(f" 5 : {sec}")
-sec = whotoo.sec_share.reconstruct_d(shares, 6, q, 4)
-print(f" 6 : {sec}")
-sec = whotoo.sec_share.reconstruct_d(shares, 7, q, 4)
-print(f" 7 : {sec}")
+for i in range(0, 8):
+    sec = whotoo.sec_share.reconstruct_d(shares, i, q, k)
+    print(f"{i} : {sec}")
 
-shares_4 = shares
-shares_4.pop(4, None)
-sec = whotoo.sec_share.reconstruct_d(shares_4, 4, q, 4)
-print(f" 4 poping (4, y): {sec}")
+for i in range(1, n + 1):
+    shares_i = shares.copy()
+    shares_i.pop(i, None)
+    sec = whotoo.sec_share.reconstruct_d(shares_i, i, q, k)
+    print(f"{i} poping ({i}, y): {sec}")
 
 deltas = [0] * k
 for i in range(1, k):
