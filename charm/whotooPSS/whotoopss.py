@@ -181,24 +181,19 @@ class WhoTooPSS():
                 p.gen_delta(id, self.k, self.group)
                 evals[p.id] = p.pub_evals_rec(id, self.mgr_pk)
 
-        q = self.group.order()
         x_shares = {}
         gamma_shares = {}
 
         for p in self.managers:
             if p.id != id:
-                xi, gammai = p.comp_shares(evals, self.mgr_pk, mgr.get_pkenc(), id, self.group)
+                xi, gammai = p.comp_shares(evals, self.mgr_pk, mgr.get_pkenc(), id)
                 x_shares[p.id] = xi
                 gamma_shares[p.id] = gammai
 
-        mgr.reconstruct(x_shares, gamma_shares, self.mgr_pk, self.sec_share, q, self.k)
+        mgr.reconstruct(x_shares, gamma_shares, self.mgr_pk, self.sec_share, self.k)
 
-        # TODO: Check reconstruction index
         print(f"x_orig     : {self.managers[id-1].skeg_share}")
         print(f"gamma_orig : {self.managers[id-1].skbbs_share}")
-
-        print(f"x_diff     : {np.log10([float(int(self.managers[id-1].skeg_share - mgr.skeg_share))])[0]}")
-        print(f"gamma_diff : {np.log10([float(int(self.managers[id-1].skbbs_share - mgr.skbbs_share))])[0]}")
 
         self.managers[id-1] = mgr
         self.mgr_pk[id] = mgr.get_pkenc()

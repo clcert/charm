@@ -1,12 +1,18 @@
-from tabnanny import verbose
 import charm.toolbox.symcrypto
-from tqdm.contrib.concurrent import thread_map
-from util import pedersen_commit, zklogeq, zklogeq_verify, mr_prove, mr_verify
+from charm.core.engine.util import objectToBytes
 from charm.toolbox.hash_module import *
 from charm.toolbox.pairinggroup import ZR
-from charm.core.engine.util import objectToBytes
 from charm.toolbox.secretshare import *
 from hashlib import sha256
+from tqdm.contrib.concurrent import thread_map
+
+from util import (
+	mr_prove, 
+	mr_verify,
+	pedersen_commit,
+	zklogeq, 
+	zklogeq_verify
+)
 
 class SecShare():
 
@@ -73,17 +79,16 @@ class SecShare():
 	def reconstruct(self, shares):
 		return self.ss.recoverSecret(shares)
 
-	def reconstruct_d(self, shares: dict, x: int, q: int, k: int):
+	def reconstruct_d(self, shares: dict, x: int, k: int):
 		lst = shares.keys()
-		#lst = list(lst)[:k+1]
+		lst = list(lst)[:k+1]
 		coeff = self.recover_coeff(lst, x)
-		print(coeff)
 		secret = 0
 		for i in lst:
 			secret += coeff[i] * shares[i]
-		return int(secret) % q
+		return secret
 
-	def recover_coeff(self, lst, x):
+	def recover_coeff(self, lst: list, x: int) -> dict:
 		coeff = {}
 		for i in lst:
 			result = 1

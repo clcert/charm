@@ -1,3 +1,7 @@
+from charm.core.engine.util import (
+    bytesToObject,
+    objectToBytes
+)
 from charm.toolbox.pairinggroup import ZR
 from json import dumps
 from nacl.signing import (
@@ -188,7 +192,7 @@ class Manager():
         for i in range(1, k):
             deltas[i] = group.random(ZR)
             deltas[0] -= deltas[i] * (x ** i)
-        deltas[0] = group.init(ZR, deltas[0])
+        
         self.deltas = deltas
 
     def eval_d(self, x: int) -> int:
@@ -211,13 +215,13 @@ class Manager():
             result += self.deltas[i] * (x ** i)
         return result
 
-    def pub_evals_rec(self, id: int, mgr_pk: dict) -> list:
+    def pub_evals_rec(self, r: int, mgr_pk: dict) -> list:
         """
         Publish the delta coefficients
 
         Parameters
         ----------
-        id : int
+        r : int
             Identifier of the replaced manager.
         mgr_pk : list[dict]
             Public keys of all the managers.
@@ -229,14 +233,12 @@ class Manager():
         """
         evals = {}
         for i in range(1, self.n + 1):
-            if i != id:
+            if i != r:
                 pkt = self.encrypt(self.eval_d(i), mgr_pk[i])
-            else:
-                pkt = 0
-            evals[i] = pkt
+                evals[i] = pkt
         return evals
 
-    def comp_shares(self, evals: dict, mgr_pk: dict, r_pk: PublicKey, r: int, group) -> list:
+    def comp_shares(self, evals: dict, mgr_pk: dict, r_pk: PublicKey, r: int) -> list:
         """
         Calculates the shares of the new manager's secret key
 
@@ -255,11 +257,11 @@ class Manager():
 
         Returns
         -------
-        list[dict]
+        list[:py:class:`pairing.Element`]
             Encrypted share of the new manager's secret key.
         """
-        x_prime = group.init(ZR, self.skeg_share)
-        gamma_prime = group.init(ZR, self.skbbs_share)
+        x_prime = self.skeg_share
+        gamma_prime = self.skbbs_share
 
         for i in range(1, self.n + 1):
             if i != r:
@@ -267,27 +269,28 @@ class Manager():
                 x_prime += dec_delta
                 gamma_prime += dec_delta
 
-        x_prime = int(x_prime)
-        gamma_prime = int(gamma_prime)
-
         x_enc = self.encrypt(x_prime, r_pk)
         gamma_enc = self.encrypt(gamma_prime, r_pk)
 
         return (x_enc, gamma_enc)
 
-    def reconstruct(self, x_shares: list, gamma_shares: list, mgr_pk: dict, ss: SecShare, q, k: int):
+    def reconstruct(self, x_shares: list, gamma_shares: list, mgr_pk: dict, ss: SecShare, k: int):
         x_dec = {}
         gamma_dec = {}
 
         for i in x_shares.keys():
             pk = mgr_pk[i]
-            x_dec[ss.group.init(ZR, i)] = ss.group.init(ZR, self.decrypt(x_shares[i], pk))
-            gamma_dec[ss.group.init(ZR, i)] = ss.group.init(ZR, self.decrypt(gamma_shares[i], pk))
+            key = ss.group.init(ZR, i)
 
-        x = ss.reconstruct_d(x_dec, self.id, q, k)
-        gamma = ss.reconstruct_d(gamma_dec, self.id, q, k)
+            x = self.decrypt(x_shares[i], pk)
+            gamma = self.decrypt(gamma_shares[i], pk)
 
-        # TODO: Check reconstruction index
+            x_dec[key] = ss.group.init(ZR, x)
+            gamma_dec[key] = ss.group.init(ZR, gamma)
+
+        x = ss.reconstruct_d(x_dec, self.id, k)
+        gamma = ss.reconstruct_d(gamma_dec, self.id, k)
+
         print(f"x_rec      : {x}")
         print(f"gamma_rec  : {gamma}")
 
