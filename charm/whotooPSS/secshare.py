@@ -80,6 +80,23 @@ class SecShare():
 		return self.ss.recoverSecret(shares)
 
 	def reconstruct_d(self, shares: dict, x: int, k: int):
+		"""
+		Reconstruct a share at a given index
+
+		Parameters
+		----------
+		shares : dict[:py:class:`pairing.Element` -> :py:class:`pairing.Element`]
+			Known shares of the polynomial.
+		x : int
+			Desired index for reconstruction.
+		k : int
+			Degree of the polynomial.
+
+		Returns
+		-------
+		:py:class:`pairing.Element`
+			Reconstructed value of P(x).
+		"""
 		lst = shares.keys()
 		lst = list(lst)[:k+1]
 		coeff = self.recover_coeff(lst, x)
@@ -89,6 +106,21 @@ class SecShare():
 		return secret
 
 	def recover_coeff(self, lst: list, x: int) -> dict:
+		"""
+		Computes the coefficients for Lagrange interpolation
+		
+		Parameters
+		----------
+		lst : list[:py:class:`pairing.Element`]
+			Indeces where the value of the polynomial is known.
+		x : int
+			Desired interpolation index.
+
+		Returns
+		-------
+		dict : dict[:py:class:`pairing.Element` -> :py:class:`pairing.Element`]
+			Coefficients corresponding to each known value of the polynomial.
+		"""
 		coeff = {}
 		for i in lst:
 			result = 1
