@@ -1,17 +1,17 @@
-from charm.toolbox.pairinggroup import PairingGroup
+from charm.toolbox.pairinggroup import (
+    PairingGroup,
+    ZR
+)
 
 from manager import Manager
 from util import User
 from whotoopss import WhoTooPSS
 
-k = 4
-n = 6
+k = 8
+n = 10
 group = PairingGroup('BN254')
 
 whotoo = WhoTooPSS(group, k, n)
-
-from random import randint
-from charm.toolbox.pairinggroup import ZR
 
 def f(x: int) -> int:
     res = x
@@ -35,12 +35,14 @@ q = whotoo.group.order()
 
 for i in range(0, 8):
     sec = whotoo.sec_share.reconstruct_d(shares, i, q, k)
-    print(f"{i} : {sec}")
+    #print(f"{i} : {sec}")
 
 for i in range(1, n + 1):
     shares_i = shares.copy()
     shares_i.pop(i, None)
     sec = whotoo.sec_share.reconstruct_d(shares_i, i, q, k)
+    if sec > q/2:
+        sec -= q
     print(f"{i} poping ({i}, y): {sec}")
 
 deltas = [0] * k
@@ -53,4 +55,4 @@ diff = {}
 for p in whotoo.managers:
     diff[p.id] = d(p.id, deltas)
 
-print(f"delta : {diff}")
+#print(f"delta : {diff}")

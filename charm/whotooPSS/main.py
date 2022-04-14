@@ -5,7 +5,7 @@ from util import User
 from whotoopss import WhoTooPSS
 
 k = 4
-n = 6
+n = 8
 group = PairingGroup('BN254')
 
 whotoo = WhoTooPSS(group, k, n)

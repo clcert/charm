@@ -1,3 +1,4 @@
+from tabnanny import verbose
 import charm.toolbox.symcrypto
 from tqdm.contrib.concurrent import thread_map
 from util import pedersen_commit, zklogeq, zklogeq_verify, mr_prove, mr_verify
@@ -72,16 +73,17 @@ class SecShare():
 	def reconstruct(self, shares):
 		return self.ss.recoverSecret(shares)
 
-	def reconstruct_d(self, shares, x, q, k):
+	def reconstruct_d(self, shares: dict, x: int, q: int, k: int):
 		lst = shares.keys()
-		lst = list(lst)[:k+1]
-		coeff = self.recover_coeff(lst, x, q)
+		#lst = list(lst)[:k+1]
+		coeff = self.recover_coeff(lst, x)
+		print(coeff)
 		secret = 0
 		for i in lst:
-			secret += (int(coeff[i]) * shares[i]) % q
-		return secret % q
+			secret += coeff[i] * shares[i]
+		return int(secret) % q
 
-	def recover_coeff(self, lst, x, q):
+	def recover_coeff(self, lst, x):
 		coeff = {}
 		for i in lst:
 			result = 1
@@ -89,7 +91,7 @@ class SecShare():
 				if not (i == j):
 					# lagrange basis poly
 					result *= (x - j) / (i - j)
-			coeff[i] = int(result) % q
+			coeff[i] = result
 		return coeff
 
 	def share_encode(self, s):

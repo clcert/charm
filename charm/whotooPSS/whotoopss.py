@@ -7,6 +7,7 @@ from charm.toolbox.pairinggroup import (
     PairingGroup,
     ZR
 )
+import numpy as np
 from tqdm.contrib.concurrent import thread_map
 
 from bbs import BBS
@@ -186,7 +187,7 @@ class WhoTooPSS():
 
         for p in self.managers:
             if p.id != id:
-                xi, gammai = p.comp_shares(evals, self.mgr_pk, mgr.get_pkenc(), id, q)
+                xi, gammai = p.comp_shares(evals, self.mgr_pk, mgr.get_pkenc(), id, self.group)
                 x_shares[p.id] = xi
                 gamma_shares[p.id] = gammai
 
@@ -195,6 +196,9 @@ class WhoTooPSS():
         # TODO: Check reconstruction index
         print(f"x_orig     : {self.managers[id-1].skeg_share}")
         print(f"gamma_orig : {self.managers[id-1].skbbs_share}")
+
+        print(f"x_diff     : {np.log10([float(int(self.managers[id-1].skeg_share - mgr.skeg_share))])[0]}")
+        print(f"gamma_diff : {np.log10([float(int(self.managers[id-1].skbbs_share - mgr.skbbs_share))])[0]}")
 
         self.managers[id-1] = mgr
         self.mgr_pk[id] = mgr.get_pkenc()

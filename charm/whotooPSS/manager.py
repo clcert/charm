@@ -236,7 +236,7 @@ class Manager():
             evals[i] = pkt
         return evals
 
-    def comp_shares(self, evals: dict, mgr_pk: dict, r_pk: PublicKey, r: int, q) -> list:
+    def comp_shares(self, evals: dict, mgr_pk: dict, r_pk: PublicKey, r: int, group) -> list:
         """
         Calculates the shares of the new manager's secret key
 
@@ -258,8 +258,8 @@ class Manager():
         list[dict]
             Encrypted share of the new manager's secret key.
         """
-        x_prime = self.skeg_share
-        gamma_prime = self.skbbs_share
+        x_prime = group.init(ZR, self.skeg_share)
+        gamma_prime = group.init(ZR, self.skbbs_share)
 
         for i in range(1, self.n + 1):
             if i != r:
@@ -267,8 +267,8 @@ class Manager():
                 x_prime += dec_delta
                 gamma_prime += dec_delta
 
-        x_prime = int(x_prime) % q
-        gamma_prime = int(gamma_prime) % q
+        x_prime = int(x_prime)
+        gamma_prime = int(gamma_prime)
 
         x_enc = self.encrypt(x_prime, r_pk)
         gamma_enc = self.encrypt(gamma_prime, r_pk)
@@ -281,8 +281,8 @@ class Manager():
 
         for i in x_shares.keys():
             pk = mgr_pk[i]
-            x_dec[i] = self.decrypt(x_shares[i], pk)
-            gamma_dec[i] = self.decrypt(gamma_shares[i], pk)
+            x_dec[ss.group.init(ZR, i)] = ss.group.init(ZR, self.decrypt(x_shares[i], pk))
+            gamma_dec[ss.group.init(ZR, i)] = ss.group.init(ZR, self.decrypt(gamma_shares[i], pk))
 
         x = ss.reconstruct_d(x_dec, self.id, q, k)
         gamma = ss.reconstruct_d(gamma_dec, self.id, q, k)
