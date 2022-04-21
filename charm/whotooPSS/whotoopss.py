@@ -1,5 +1,3 @@
-from charm.schemes.pkenc.pkenc_rsa import RSA_Enc
-from charm.toolbox.ecgroup import ECGroup
 from charm.toolbox.hash_module import Hash
 from charm.toolbox.pairinggroup import (
     G1,
@@ -17,7 +15,6 @@ from secshare import SecShare
 from util import (
     User
 )
-from wtset import PrivateMultiset
 
 class WhoTooPSS():
     """
@@ -60,10 +57,6 @@ class WhoTooPSS():
         Public key of BBS scheme
     bbs : :py:class:`bbs.BBS`
         Boneh Boyen Shachum signature scheme.
-    mset : :py:class:`wtset.PrivateMultiset`
-        Private multiset class.
-    wtset : list[tuple[:py:class:`pairing.Element`]]
-        ElGamal cipher of v (base for x secret share)
 
     Methods
     -------
@@ -106,6 +99,7 @@ class WhoTooPSS():
         a = self.group.random(ZR)
         b = self.group.random(ZR)
         c = a * b
+        #TODO: descentralize gen_pedersen -> genShares
         wa, _ = self.sec_share.gen_pedersen(a, rbv)
         wb, _ = self.sec_share.gen_pedersen(b, rbv)
         wc, _ = self.sec_share.gen_pedersen(c, rbv)
@@ -144,9 +138,7 @@ class WhoTooPSS():
         self.pkbbs = self.sec_share.exp(self.g2)
 
         self.bbs = BBS(self.group, self.g1, self.g2, self.pkeg['h'], self.pkbbs, self.sec_share)
-        self.mset = PrivateMultiset(self.sec_share, self.eg, self.pkeg)
 
-        self.wtset = self.mset.initialize()
 
     def issue(self, user: User):
         """
