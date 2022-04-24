@@ -1,3 +1,4 @@
+from re import I
 from charm.toolbox.hash_module import Hash
 from charm.toolbox.pairinggroup import (
     G1,
@@ -79,7 +80,6 @@ class WhoTooPSS():
         self.group = group
         self.hash_func = Hash(pairingElement=self.group)
 
-        self.users = []
         self.mgr_pk = {}
         self.mgr_vk = {}
         self.id_map = {}
@@ -94,25 +94,18 @@ class WhoTooPSS():
         self.sec_share = SecShare(self.group, self.g1, self.g2, self.k, self.n, self.eg)
         self.sec_share.h = self.group.random(G1) #temp
 
-        # initialize Beaver's triples
-        rbv = self.group.random(ZR)
-        a = self.group.random(ZR)
-        b = self.group.random(ZR)
-        c = a * b
-        #TODO: descentralize gen_pedersen -> genShares
-        wa, _ = self.sec_share.gen_pedersen(a, rbv)
-        wb, _ = self.sec_share.gen_pedersen(b, rbv)
-        wc, _ = self.sec_share.gen_pedersen(c, rbv)
-
         #initialize managers
         self.managers = []
+        self.beaver = []
         for i in range(1, n+1):
-            man = Manager(i, n)
-            man.beaver = (wa[i][0], wb[i][0], wc[i][0])
-            self.managers.append(man)
-            self.mgr_pk[i] = man.get_pkenc()
-            self.mgr_vk[i] = man.get_pksig()
+            mgr = Manager(i, n, self.sec_share)
+            self.managers.append(mgr)
+            self.mgr_pk[i] = mgr.get_pkenc()
+            self.mgr_vk[i] = mgr.get_pksig()
         
+        for p in self.managers:
+            self.beaver.append(p.gen_beaver(self.mgr_pk))
+
         self.sec_share.managers = self.managers
 
         #initialize ElGamal keys
@@ -139,6 +132,11 @@ class WhoTooPSS():
 
         self.bbs = BBS(self.group, self.g1, self.g2, self.pkeg['h'], self.pkbbs, self.sec_share)
 
+    def add_manager(self, mgr: Manager):
+        i = mgr.get_index()
+        assert (i > self.n), "Invalid manager index"
+        self.mgr_pk[i] = mgr.get_pkenc()
+        self.mgr_vk[i] = mgr.get_pksig()
 
     def issue(self, user: User):
         """
@@ -149,10 +147,15 @@ class WhoTooPSS():
         user : :py:class:`util.User`
             User requesting a signing key.
         """
+        if not self.beaver:
+            for p in self.manager:
+                self.beaver.append(p.gen_beaver(self.mgr_pk))
+        bev = self.beaver.pop()
+        for p in self.managers:
+            p.set_beaver(bev)
         # A = r
         self.managers, r = self.bbs.key_issue(self.managers, user)
         self.id_map[r] = user
-        self.users.append(user)
 
     def recover(self, id, mgr):
         """
@@ -170,7 +173,7 @@ class WhoTooPSS():
 
         for p in self.managers:
             if p.id != id:
-                p.gen_delta(id, self.k, self.group)
+                p.gen_delta(id, self.k)
                 evals[p.id] = p.pub_evals_rec(id, self.mgr_pk)
 
         x_shares = {}
@@ -182,7 +185,7 @@ class WhoTooPSS():
                 x_shares[p.id] = xi
                 gamma_shares[p.id] = gammai
 
-        mgr.reconstruct(x_shares, gamma_shares, self.mgr_pk, self.sec_share, self.k)
+        mgr.reconstruct(x_shares, gamma_shares, self.mgr_pk, self.k)
 
         print(f"x_orig     : {self.managers[id-1].skeg_share}")
         print(f"gamma_orig : {self.managers[id-1].skbbs_share}")
@@ -201,8 +204,8 @@ class WhoTooPSS():
         enc_u = {}
 
         for p in self.managers:
-            p.gen_delta(0, self.k, self.group)
-            p.gen_epsilon(self.g1)
+            p.gen_delta(0, self.k)
+            p.gen_epsilon()
             enc_u[p.id] = p.pub_evals_upd(self.mgr_pk)
 
         for p in self.managers:
@@ -210,12 +213,15 @@ class WhoTooPSS():
                 print("Found invalid signature, interrupting process...")
                 return
 
-            if not p.verify_upd(enc_u, self.mgr_pk, self.g1):
-                print("Packet contents are inconsistent, interrupting process")
+            if not p.verify_upd(enc_u, self.mgr_pk):
+                print("Packet contents are inconsistent, interrupting process...")
                 return
+
+        self.beaver = []
 
         for p in self.managers:
             p.update_shares(enc_u, self.mgr_pk)
+            self.beaver.append(p.gen_beaver(self.mgr_pk))
 
     def sign(self, user: User, msg: str) -> "tuple[tuple]":
         """

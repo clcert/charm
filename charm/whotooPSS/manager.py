@@ -51,10 +51,11 @@ class Manager():
         Current timestep of the scheme.
     """
 
-    def __init__(self, id: int, n: int):
+    def __init__(self, id: int, n: int, ss: SecShare):
         self.id = id
         self.n = n
         self.da_shares = [0] * n
+        self.sec_share = ss
         self.skeg_share = None
         self.skbbs_share = None
         self.skenc = PrivateKey.generate()
@@ -74,9 +75,21 @@ class Manager():
         self.gen = []
 
 
+# ------------------- Getters -------------------- #
+    def get_index(self) -> int:
+        """
+        Gets the manager's index for the secret sharing schemes
+
+        Returns
+        -------
+        int
+            Manager's index in the secret share polynomials.
+        """
+        return self.id
+
     def get_pkenc(self) -> PublicKey:
         """
-        Gets the managers encryption public key
+        Gets the manager's encryption public key
 
         Returns
         -------
@@ -87,7 +100,7 @@ class Manager():
 
     def get_pksig(self) -> bytes:
         """
-        Get the managers signing public key
+        Get the manager's signing public key
         
         Returns
         -------
@@ -96,6 +109,7 @@ class Manager():
         """
         return self.sksig.verify_key.encode()
 
+# ------------------- Encryption -------------------- #
     def encrypt(self, msg: int, rpk: PublicKey) -> EncryptedMessage:
         """
         Encrypts a message for the specified recipient
@@ -136,6 +150,7 @@ class Manager():
         rm = b.decrypt(cph)
         return int(rm.decode('utf-8'))
 
+# ------------------- Signature -------------------- #
     def sign(self, msg: str) -> SignedMessage:
         """
         Signs a string
@@ -174,7 +189,50 @@ class Manager():
         ver = VerifyKey(spk)
         return ver.verify(sigma)
 
-    def gen_delta(self, x: int, k: int, group):
+# ------------------- Initialization -------------------- #
+    def gen_beaver(self, mgr_pk: dict) -> tuple:
+        """
+        Generates beaver triplets for every manager
+
+        mgr_pk : dict[:py:class:`nacl.public.PublicKey`]
+            Public keys of the managers.
+
+        Returns
+        -------
+        tuple[dict]
+            Shares of the beaver triplets.
+        """
+        rbv = self.sec_share.group.random(ZR)
+        a = self.sec_share.group.random(ZR)
+        b = self.sec_share.group.random(ZR)
+        c = a * b
+
+        wa, _ = self.sec_share.gen_pedersen(a, rbv)
+        wb, _ = self.sec_share.gen_pedersen(b, rbv)
+        wc, _ = self.sec_share.gen_pedersen(c, rbv)
+
+        ea = {}
+        eb = {}
+        ec = {}
+
+        for i in range(1, self.n + 1):
+            ea[i] = self.encrypt(wa[i][0], mgr_pk[i])
+            eb[i] = self.encrypt(wb[i][0], mgr_pk[i])
+            ec[i] = self.encrypt(wc[i][0], mgr_pk[i])
+
+        return (self.get_pkenc(), ea, eb, ec)
+
+    def set_beaver(self, bev: tuple):
+        """
+        """
+        pk, a, b, c = bev
+        ai = self.decrypt(a[self.id], pk)
+        bi = self.decrypt(b[self.id], pk)
+        ci = self.decrypt(c[self.id], pk)
+        self.beaver = (ai, bi, ci)
+
+# ------------------- Delta Polynomial -------------------- #
+    def gen_delta(self, x: int, k: int):
         """
         Computes delta coefficients so the polinomial crosses at x
         
@@ -187,10 +245,9 @@ class Manager():
         group : PairingGroup
             Pairing group.
         """
-        # Required k managers for the protocol
         deltas = [0] * k
         for i in range(1, k):
-            deltas[i] = group.random(ZR)
+            deltas[i] = self.sec_share.group.random(ZR)
             deltas[0] -= deltas[i] * (x ** i)
         
         self.deltas = deltas
@@ -215,6 +272,7 @@ class Manager():
             result += self.deltas[i] * (x ** i)
         return result
 
+# ------------------- Recovery -------------------- #
     def pub_evals_rec(self, r: int, mgr_pk: dict) -> list:
         """
         Publish the delta coefficients
@@ -238,7 +296,7 @@ class Manager():
                 evals[i] = pkt
         return evals
 
-    def comp_shares(self, evals: dict, mgr_pk: dict, r_pk: PublicKey, r: int) -> list:
+    def comp_shares(self, evals: dict, mgr_pk: dict, r_pk: PublicKey, r: int) -> tuple:
         """
         Calculates the shares of the new manager's secret key
 
@@ -274,22 +332,38 @@ class Manager():
 
         return (x_enc, gamma_enc)
 
-    def reconstruct(self, x_shares: list, gamma_shares: list, mgr_pk: dict, ss: SecShare, k: int):
+    def reconstruct(self, x_shares: list, gamma_shares: list, mgr_pk: dict, k: int):
+        """
+        Reconstructs the shares of the manager's secret key
+
+        Parameters
+        ----------
+        x_shares : dict[:py:class:`pairing.Element`->:py:class:`pairing.Element`]
+            Shares of the that interpolate the share of ElGammal secret key.
+        gamma_shares : dict[:py:class:`pairing.Element`->:py:class:`pairing.Element`]
+            Shares of the that interpolate the share of BBS secret key.
+        mgr_pk : dict[int->:py:class:`nacl.public.PublicKey`]
+            Public keys of all the managers.
+        ss : :py:class:`secshare.SecShare`
+            Secret sharing scheme.
+        k : int
+            Degree of the delta polynomial.
+        """
         x_dec = {}
         gamma_dec = {}
 
         for i in x_shares.keys():
             pk = mgr_pk[i]
-            key = ss.group.init(ZR, i)
+            key = self.sec_share.group.init(ZR, i)
 
             x = self.decrypt(x_shares[i], pk)
             gamma = self.decrypt(gamma_shares[i], pk)
 
-            x_dec[key] = ss.group.init(ZR, x)
-            gamma_dec[key] = ss.group.init(ZR, gamma)
+            x_dec[key] = self.sec_share.group.init(ZR, x)
+            gamma_dec[key] = self.sec_share.group.init(ZR, gamma)
 
-        x = ss.reconstruct_d(x_dec, self.id, k)
-        gamma = ss.reconstruct_d(gamma_dec, self.id, k)
+        x = self.sec_share.reconstruct_d(x_dec, self.id, k)
+        gamma = self.sec_share.reconstruct_d(gamma_dec, self.id, k)
 
         print(f"x_rec      : {x}")
         print(f"gamma_rec  : {gamma}")
@@ -297,12 +371,30 @@ class Manager():
         self.skeg_share = x
         self.skbbs_share = gamma
 
-    def gen_epsilon(self, g):
+# ------------------- Update -------------------- #
+    def gen_epsilon(self):
+        """
+        Computes the epsilon commitments
+        """
         k = len(self.deltas)
         for m in range(0, k):
-            self.epsilons[m] = g ** self.deltas[m]
+            self.epsilons[m] = self.sec_share.g ** self.deltas[m]
 
-    def pub_evals_upd(self, mgr_pk: dict) -> dict:
+    def pub_evals_upd(self, mgr_pk: dict) -> tuple:
+        """
+        Evaluates the delta polynomial for every manager, then encrypts and sign the result.
+
+        Parameters
+        ----------
+        mgr_pk : dict[int->:py:class:`nacl.public.PublicKey`]
+            Public keys of all the managers.
+
+        Returns
+        -------
+        tuple[dict, :py:class:`nacl.signing.SignedMessage`]
+            Sidned dictionary including the identity of the manager, following time step, 
+            epsilon commitments and encrypted delta evaluations.
+        """
         e = {}
         for i in mgr_pk.keys():
             e[i] = self.encrypt(self.eval_d(i), mgr_pk[i])
@@ -343,7 +435,7 @@ class Manager():
                 return False
         return result
 
-    def verify_upd(self, evals: dict, mgr_pk: dict, g1) -> bool:
+    def verify_upd(self, evals: dict, mgr_pk: dict) -> bool:
         """
         Verifies the correctness of the update packet contents
 
@@ -351,8 +443,6 @@ class Manager():
         ----------
         evals : dict
             Update packets commited by all managers.
-        g1 : :py:class:`pairing.Element`
-            G1 of the pairing group.
 
         Returns
         -------
@@ -367,11 +457,21 @@ class Manager():
                 prod = 1
                 for m in pkt["epsilons"].keys():
                     prod *= (pkt["epsilons"][m] ** (self.id ** m))
-                result = result and (g1 ** u == prod)
+                result = result and (self.sec_share.g ** u == prod)
         
         return result
 
     def update_shares(self, evals: dict, mgr_pk: dict):
+        """
+        Adds up the recieved delta evaluations to update the secret keys
+        
+        Parameters
+        ----------
+        evals : dict
+            Dictionary containing the encrypted evaluations of all deltas.
+        mgr_pk : dict[int->:py:class:`nacl.public.PublicKey`]
+            Public keys of all the managers.
+        """
         for j in evals.keys():
             u = self.decrypt(evals[j][0]["e"][self.id], mgr_pk[j])
             self.skeg_share += u

@@ -32,7 +32,7 @@ print(whotoo.managers[2].decrypt(cph, whotoo.managers[1].get_pkenc()))
 
 print("--- Manager replacement ---")
 rpc = 3
-mgr = Manager(rpc, n)
+mgr = Manager(rpc, n, whotoo.sec_share)
 whotoo.recover(rpc, mgr)
 whotoo.update()
 
