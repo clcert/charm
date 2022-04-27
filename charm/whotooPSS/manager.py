@@ -130,7 +130,7 @@ class Manager():
         m = bytes(str(msg), 'utf-8')
         return b.encrypt(m)
 
-    def decrypt(self, cph: EncryptedMessage, spk: PublicKey) -> int:
+    def decrypt(self, cph: EncryptedMessage, spk: PublicKey) -> str:
         """
         Decrypts a message intended to the manager
 
@@ -143,12 +143,12 @@ class Manager():
 
         Returns
         -------
-        int
-            Decrypted message.
+        str
+            Decrypted message as utf-8 string.
         """
         b = Box(self.skenc, spk)
         rm = b.decrypt(cph)
-        return int(rm.decode('utf-8'))
+        return rm.decode('utf-8')
 
 # ------------------- Signature -------------------- #
     def sign(self, msg: str) -> SignedMessage:
@@ -194,6 +194,8 @@ class Manager():
         """
         Generates beaver triplets for every manager
 
+        Parameters
+        ----------
         mgr_pk : dict[:py:class:`nacl.public.PublicKey`]
             Public keys of the managers.
 
@@ -224,12 +226,76 @@ class Manager():
 
     def set_beaver(self, bev: tuple):
         """
+        Decrypts the shares of a beaver triplet from the public ledger
+
+        Parameters
+        ----------
+        bev : tuple
+            Shares of the beaver triplets.
         """
         pk, a, b, c = bev
-        ai = self.decrypt(a[self.id], pk)
-        bi = self.decrypt(b[self.id], pk)
-        ci = self.decrypt(c[self.id], pk)
+        ai = int(self.decrypt(a[self.id], pk))
+        bi = int(self.decrypt(b[self.id], pk))
+        ci = int(self.decrypt(c[self.id], pk))
         self.beaver = (ai, bi, ci)
+
+    def commit_shares(self, mgr_pk: dict) -> dict:
+        """
+        Commit the shares for the ElGamal secret key
+
+        Parameters
+        ----------
+        mgr_pk : dict[:py:class:`nacl.public.PublicKey`]
+            Public keys of the managers.
+
+        Returns
+        -------
+        dict
+            Dictionary containing the encrypted shares and the corresponding commitments.
+        """
+        z = self.sec_share.group.random(ZR)
+        r = self.sec_share.group.random(ZR)
+        w, v, vf = self.sec_share.gen_pedersen(z, r, feldman=True)
+        
+        shares = {}
+        for j in range(1, self.n + 1):
+            shares[j] = self.encrypt(w[j], mgr_pk[j])
+
+        return {"shares": shares, "feldman": vf, "pedersen": v}
+
+    def gen_skeg(self, com_sh: dict, mgr_pk: dict):
+        """
+        Computes the share of the secret key for ElGamal
+
+        Parameters
+        ----------
+        com_sh : dict[]
+            Encrypted shares and commitments.
+        mgr_pk : dict[:py:class:`nacl.public.PublicKey`]
+            Public keys of the managers.
+        """
+        self.temp2 = 0
+        i = self.id
+        for j in range(1, self.n + 1):
+            dec = self.decrypt(com_sh[j]["shares"][i], mgr_pk[j])
+            sj, rj = map(int, dec[1:-1].split(","))
+            if i != j:
+                vf = com_sh[j]["feldman"]
+                vp = com_sh[j]["pedersen"]
+                verf = self.sec_share.verify_feldman(sj, vf, i)
+                verp = self.sec_share.verify_pedersen(sj, rj, vp, i)
+                if not (verf and verp):
+                    raise Exception(f"Manager {i} failed to verify the commitment of manager {j}")
+            self.temp2 += self.sec_share.group.init(ZR, sj)
+        self.skeg_share = self.temp2
+
+    def set_pkeg(self, h: int):
+        """
+        Sets the public key of ElGamal
+        h : int
+            ElGamal public key.
+        """
+        self.sec_share.h = h
 
 # ------------------- Delta Polynomial -------------------- #
     def gen_delta(self, x: int, k: int):
@@ -323,7 +389,7 @@ class Manager():
 
         for i in range(1, self.n + 1):
             if i != r:
-                dec_delta = self.decrypt(evals[i][self.id], mgr_pk[i])
+                dec_delta = int(self.decrypt(evals[i][self.id], mgr_pk[i]))
                 x_prime += dec_delta
                 gamma_prime += dec_delta
 
@@ -339,7 +405,7 @@ class Manager():
         Parameters
         ----------
         x_shares : dict[:py:class:`pairing.Element`->:py:class:`pairing.Element`]
-            Shares of the that interpolate the share of ElGammal secret key.
+            Shares of the that interpolate the share of ElGamal secret key.
         gamma_shares : dict[:py:class:`pairing.Element`->:py:class:`pairing.Element`]
             Shares of the that interpolate the share of BBS secret key.
         mgr_pk : dict[int->:py:class:`nacl.public.PublicKey`]
@@ -356,11 +422,11 @@ class Manager():
             pk = mgr_pk[i]
             key = self.sec_share.group.init(ZR, i)
 
-            x = self.decrypt(x_shares[i], pk)
-            gamma = self.decrypt(gamma_shares[i], pk)
+            xi = int(self.decrypt(x_shares[i], pk))
+            gammai = int(self.decrypt(gamma_shares[i], pk))
 
-            x_dec[key] = self.sec_share.group.init(ZR, x)
-            gamma_dec[key] = self.sec_share.group.init(ZR, gamma)
+            x_dec[key] = self.sec_share.group.init(ZR, xi)
+            gamma_dec[key] = self.sec_share.group.init(ZR, gammai)
 
         x = self.sec_share.reconstruct_d(x_dec, self.id, k)
         gamma = self.sec_share.reconstruct_d(gamma_dec, self.id, k)
@@ -428,11 +494,11 @@ class Manager():
             True if every signature is verified.
         """
         result = True
-        for i in evals.keys():
+        for j in evals.keys():
             try:
-                result = result and self.verify(mgr_vk[i], evals[i][1])
+                result = result and self.verify(mgr_vk[j], evals[j][1])
             except:
-                return False
+                raise Exception(f"Manager {self.id} found {j}'s signature to be invalid")
         return result
 
     def verify_upd(self, evals: dict, mgr_pk: dict) -> bool:
@@ -453,7 +519,7 @@ class Manager():
         for j in evals.keys():
             if j != self.id:
                 pkt = evals[j][0]
-                u = self.decrypt(pkt["e"][self.id], mgr_pk[j])
+                u = int(self.decrypt(pkt["e"][self.id], mgr_pk[j]))
                 prod = 1
                 for m in pkt["epsilons"].keys():
                     prod *= (pkt["epsilons"][m] ** (self.id ** m))
@@ -473,7 +539,7 @@ class Manager():
             Public keys of all the managers.
         """
         for j in evals.keys():
-            u = self.decrypt(evals[j][0]["e"][self.id], mgr_pk[j])
+            u = int(self.decrypt(evals[j][0]["e"][self.id], mgr_pk[j]))
             self.skeg_share += u
             self.skbbs_share += u
 

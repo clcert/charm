@@ -110,14 +110,20 @@ class WhoTooPSS():
 
         #initialize ElGamal keys
         #u = v^x
-        h = self.sec_share.geng()
+        com_sh = {}
+        for p in self.managers:
+            com_sh[p.id] = p.commit_shares(self.mgr_pk)
+        for p in self.managers:
+            p.gen_skeg(com_sh, self.mgr_pk)
+        h = self.group.init(ZR, 1)
+        for i in com_sh.keys():
+            h *= com_sh[i]["feldman"][0]
+
         self.sec_share.h = h
-        self.pkeg = {'g': self.g1, 'h': h}
+        self.pkeg = {"g": self.g1, "h": h}
 
-        def temp_func1(p):
-            p.skeg_share = p.temp2
-
-        thread_map(temp_func1, self.managers, leave=False)
+        for p in self.managers:
+            p.set_pkeg(h)
 
         #initialize BBS keys
         self.sec_share.gen()
@@ -210,12 +216,10 @@ class WhoTooPSS():
 
         for p in self.managers:
             if not p.verify_sigs(enc_u, self.mgr_vk):
-                print("Found invalid signature, interrupting process...")
-                return
+                raise Exception(f"Manager {p.id} found an invalid signature")
 
             if not p.verify_upd(enc_u, self.mgr_pk):
-                print("Packet contents are inconsistent, interrupting process...")
-                return
+                raise Exception(f"Manager {p.id} found the update commitments to be inconsistent")
 
         self.beaver = []
 
