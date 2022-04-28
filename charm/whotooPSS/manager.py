@@ -1,7 +1,3 @@
-from charm.core.engine.util import (
-    bytesToObject,
-    objectToBytes
-)
 from charm.toolbox.pairinggroup import ZR
 from json import dumps
 from nacl.signing import (
@@ -17,6 +13,10 @@ from nacl.public import (
 from nacl.utils import EncryptedMessage
 
 from secshare import SecShare
+from util import (
+    zklogeq,
+    zklogeq_verify
+)
 
 class Manager():
 
@@ -37,8 +37,12 @@ class Manager():
         Shares of user private key
     skeg_share : :py:class:`pairing.Element`
         Share of ElGamal secret key.
+    pkeg : :py:class:`pairing.Element`
+        ElGamal public key.
     skbbs_share : :py:class:`pairing.Element`
         Share of BBS secret key.
+    pkbbs : :py:class:`pairing.Element`
+        BBS public key.
     skenc : :py:class:`nacl.public.PrivateKey`
         Secret key for encryption scheme.
     sksig : :py:class:`nacl.signing.SigningKey`
@@ -57,7 +61,9 @@ class Manager():
         self.da_shares = [0] * n
         self.sec_share = ss
         self.skeg_share = None
+        self.pkeg = None
         self.skbbs_share = None
+        self.pkbbs = None
         self.skenc = PrivateKey.generate()
         self.sksig = SigningKey.generate()
         self.deltas = []
@@ -108,6 +114,26 @@ class Manager():
             Manager's signing key
         """
         return self.sksig.verify_key.encode()
+
+    def get_pkeg(self):
+        """
+        Get the manager's ElGamal public key
+
+        Returns
+        :py:class:`pairing.Element`
+            Manager's ElGamal public key.
+        """
+        return self.pkeg
+
+    def get_pkbbs(self):
+        """
+        Get the manager's BBS public key
+
+        Returns
+        :py:class:`pairing.Element`
+            Manager's BBS public key.
+        """
+        return self.pkbbs
 
 # ------------------- Encryption -------------------- #
     def encrypt(self, msg: int, rpk: PublicKey) -> EncryptedMessage:
@@ -189,6 +215,14 @@ class Manager():
         ver = VerifyKey(spk)
         return ver.verify(sigma)
 
+# ------------------- Copying -------------------- #
+
+    def copy_2_1(self):
+        """
+        Copies the share at temp2 to temp1
+        """
+        self.temp1 = self.temp2
+
 # ------------------- Initialization -------------------- #
     def gen_beaver(self, mgr_pk: dict) -> tuple:
         """
@@ -239,7 +273,7 @@ class Manager():
         ci = int(self.decrypt(c[self.id], pk))
         self.beaver = (ai, bi, ci)
 
-    def commit_shares(self, mgr_pk: dict) -> dict:
+    def commit_gen(self, mgr_pk: dict) -> dict:
         """
         Commit the shares for the ElGamal secret key
 
@@ -263,9 +297,9 @@ class Manager():
 
         return {"shares": shares, "feldman": vf, "pedersen": v}
 
-    def gen_skeg(self, com_sh: dict, mgr_pk: dict):
+    def gen_sk(self, com_sh: dict, mgr_pk: dict):
         """
-        Computes the share of the secret key for ElGamal
+        Computes the share of the secret key
 
         Parameters
         ----------
@@ -287,15 +321,81 @@ class Manager():
                 if not (verf and verp):
                     raise Exception(f"Manager {i} failed to verify the commitment of manager {j}")
             self.temp2 += self.sec_share.group.init(ZR, sj)
+
+    def set_skeg(self):
+        """
+        Sets the ElGamal secret key as the share stored in temp2
+        """
         self.skeg_share = self.temp2
 
-    def set_pkeg(self, h: int):
+    def set_pkeg(self, com_sh: dict):
         """
         Sets the public key of ElGamal
-        h : int
-            ElGamal public key.
+
+        Parameters
+        ----------
+        com_sh : dict
         """
+        h = self.sec_share.group.init(ZR, 1)
+        for j in range(1, self.n + 1):
+            h *= com_sh[j]["feldman"][0]
         self.sec_share.h = h
+        self.pkeg = {"g": self.sec_share.g, "h": h}
+
+    def set_skbbs(self):
+        """
+        Sets the BBS secret key as the share stored in temp2
+        """
+        self.skbbs_share = self.temp2
+
+    def commit_exp(self, b) -> dict:
+        """
+        Commits the shares corresponding to b ^ temp1
+
+        Parameters
+        ----------
+        b : :py:class:`pairing.Element`
+            Base for the calculation.
+
+        Returns
+        -------
+        dict
+            Dictionary containg b^temp1, g1^temp1 and a zkproof.
+        """
+        bs = b ** self.temp1
+        gs = self.sec_share.g ** self.temp1
+        proof = zklogeq(self.sec_share.group, self.sec_share.g, b, self.temp1)
+        return {"b": b, "bs": bs, "gs": gs, "proof": proof}
+
+    def verify_exp(self, com_sh):
+        """"""
+        i = self.id
+        for j in range(1, self.n + 1):
+            if i != j:
+                cs = com_sh[j]
+                a, c, t = cs["proof"]
+                ver = zklogeq_verify(self.sec_share.g, cs["b"], cs["gs"], cs["bs"], a, c, t)
+                if not ver:
+                    raise Exception(f"Manager {i} failed to verify {j}'s commitmet")
+
+    def set_pkbbs(self, com_sh):
+        """"""
+        r = self.sec_share.group.init(ZR, 1)
+        for j in range(1, self.n + 1):
+            bs = com_sh[j]["bs"]
+            ip = self.sec_share.group.init(ZR, j)
+            r *= (bs ** self.sec_share.coeffs[ip])
+        self.pkbbs = r
+
+# ------------------- Issue -------------------- #
+
+    def gen_inv(self):
+        """"""
+        pass
+
+    def invert(self):
+        """"""
+        pass
 
 # ------------------- Delta Polynomial -------------------- #
     def gen_delta(self, x: int, k: int):

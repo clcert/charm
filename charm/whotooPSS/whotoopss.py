@@ -106,43 +106,39 @@ class WhoTooPSS():
         for p in self.managers:
             self.beaver.append(p.gen_beaver(self.mgr_pk))
 
-        self.sec_share.managers = self.managers
-
         #initialize ElGamal keys
-        #u = v^x
+        #u = v^x : h = v^skeg
         com_sh = {}
         for p in self.managers:
-            com_sh[p.id] = p.commit_shares(self.mgr_pk)
+            com_sh[p.id] = p.commit_gen(self.mgr_pk)
         for p in self.managers:
-            p.gen_skeg(com_sh, self.mgr_pk)
-        h = self.group.init(ZR, 1)
-        for i in com_sh.keys():
-            h *= com_sh[i]["feldman"][0]
-
-        self.sec_share.h = h
-        self.pkeg = {"g": self.g1, "h": h}
-
+            p.gen_sk(com_sh, self.mgr_pk)
+            p.set_skeg()
         for p in self.managers:
-            p.set_pkeg(h)
+            p.set_pkeg(com_sh)
+        
+        self.pkeg = self.managers[1].get_pkeg()
+        self.sec_share.h = self.pkeg["h"]
 
         #initialize BBS keys
-        self.sec_share.gen()
-
-        def temp_func2(p):
-            p.temp1 = p.temp2
-            p.skbbs_share = p.temp2
-
-        thread_map(temp_func2, self.managers, leave=False)
-        # w = g2^gamma
-        self.pkbbs = self.sec_share.exp(self.g2)
+        # w = g2^gamma : pkbss = g2^skbss
+        com_sh = {}
+        for p in self.managers:
+            com_sh[p.id] = p.commit_gen(self.mgr_pk)
+        for p in self.managers:
+            p.gen_sk(com_sh, self.mgr_pk)
+            p.set_skbbs()
+            p.copy_2_1()
+        
+        com_sh = {}
+        for p in self.managers:
+            com_sh[p.id] = p.commit_exp(self.g2)
+        for p in self.managers:
+            p.verify_exp(com_sh)
+            p.set_pkbbs(com_sh)
+        self.pkbbs = self.managers[1].get_pkbbs()
 
         self.bbs = BBS(self.group, self.g1, self.g2, self.pkeg['h'], self.pkbbs, self.sec_share)
-
-    def add_manager(self, mgr: Manager):
-        i = mgr.get_index()
-        assert (i > self.n), "Invalid manager index"
-        self.mgr_pk[i] = mgr.get_pkenc()
-        self.mgr_vk[i] = mgr.get_pksig()
 
     def issue(self, user: User):
         """
