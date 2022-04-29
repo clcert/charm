@@ -1,10 +1,9 @@
-import charm.toolbox.symcrypto
-from util import pedersen_commit, zklogeq, zklogeq_verify
 from charm.toolbox.hash_module import *
-from charm.toolbox.pairinggroup import PairingGroup,ZR,G1,G2,order
-from charm.core.engine.util import objectToBytes,bytesToObject
+from charm.toolbox.pairinggroup import ZR
+from charm.core.engine.util import objectToBytes
 from charm.toolbox.secretshare import *
-from hashlib import sha256
+
+from user import User
 
 class BBS():
 
@@ -18,22 +17,46 @@ class BBS():
 		self.w = w
 		self.h = Hash(pairingElement=self.group)
 
-	def key_issue(self, managers, user):
+	def key_issue(self, user: User, managers: list, mgr_pk: dict):
+		com_sh = {}
+		for p in managers:
+			com_sh[p.get_index()] = p.commit_gen(mgr_pk)
+		for p in managers:
+			p.gen_sk(com_sh, mgr_pk)
+			p.copy_2_1()
+			p.copy_2_4()
+			com_sh[p.get_index()] = p.commit_gen(mgr_pk)
+		for p in managers:
+			p.gen_sk(com_sh, mgr_pk)
+		mul_sh = {}
+		for p in managers:
+			mul_sh[p.get_index()] = p.mul_shares()
+		w_shares = {}
+		for p in managers:
+			ip = self.group.init(ZR, p.get_index())
+			w_shares[ip] = p.pool_mul(mul_sh)
+		w = self.sec_share.reconstruct(w_shares)
+		winv = w ** -1
+		exp_sh = {}
+		for p in managers:
+			p.invert(winv)
+			exp_sh[p.get_index()] = p.commit_exp(self.g1)
+		for p in managers:
+			p.verify_exp(exp_sh)
+		r = managers[1].pool_exp(exp_sh)
+		
+		#TODO: Find out why this affects dist_dec
 		self.sec_share.managers = managers
-		r = self.sec_share.gen_inv()
 
-		for p in self.sec_share.managers:
-			pid = p.id
-			alphai = p.temp4 - p.skbbs_share
-			user.da_shares[pid-1] = alphai
+		pkenc = user.get_pkenc()
+		alpha_shares = {}
+		for p in managers:
+			alpha_shares[p.get_index()] = p.get_alpha(pkenc)
 
-		alpha_shares = {self.group.init(ZR, i): user.da_shares[i-1] for i in range(1, len(user.da_shares)+1)}
-		alpha = self.sec_share.reconstruct(alpha_shares)
+		user.set_skU(alpha_shares, mgr_pk)
+		user.set_pkU(r)
 
-		user.alpha = alpha
-		user.R = r
-
-		return managers, r
+		return r
 
 	def phi(self, t1, t2, t3, c1, c2):
 		tt1 = self.u ** t1

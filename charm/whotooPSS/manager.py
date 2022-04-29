@@ -19,7 +19,6 @@ from util import (
 )
 
 class Manager():
-
     """
     Scheme manager class
 
@@ -54,7 +53,6 @@ class Manager():
     time_step : int
         Current timestep of the scheme.
     """
-
     def __init__(self, id: int, n: int, ss: SecShare):
         self.id = id
         self.n = n
@@ -79,7 +77,6 @@ class Manager():
         self.temp7 = None
         self.beaver = None
         self.gen = []
-
 
 # ------------------- Getters -------------------- #
     def get_index(self) -> int:
@@ -216,12 +213,17 @@ class Manager():
         return ver.verify(sigma)
 
 # ------------------- Copying -------------------- #
-
     def copy_2_1(self):
         """
         Copies the share at temp2 to temp1
         """
         self.temp1 = self.temp2
+
+    def copy_2_4(self):
+        """
+        Copies the share at temp2 to temp4
+        """
+        self.temp4 = self.temp2
 
 # ------------------- Initialization -------------------- #
     def gen_beaver(self, mgr_pk: dict) -> tuple:
@@ -367,35 +369,131 @@ class Manager():
         proof = zklogeq(self.sec_share.group, self.sec_share.g, b, self.temp1)
         return {"b": b, "bs": bs, "gs": gs, "proof": proof}
 
-    def verify_exp(self, com_sh):
-        """"""
+    def verify_exp(self, exp_sh: dict):
+        """
+        Verifies that the shares of b^temp1 are consistent with its commitments
+
+        Parameters
+        ----------
+        com_sh : dict
+            Shares of b^temp_1 and its commitments.
+        """
         i = self.id
         for j in range(1, self.n + 1):
             if i != j:
-                cs = com_sh[j]
-                a, c, t = cs["proof"]
-                ver = zklogeq_verify(self.sec_share.g, cs["b"], cs["gs"], cs["bs"], a, c, t)
+                es = exp_sh[j]
+                a, c, t = es["proof"]
+                ver = zklogeq_verify(self.sec_share.g, es["b"], es["gs"], es["bs"], a, c, t)
                 if not ver:
                     raise Exception(f"Manager {i} failed to verify {j}'s commitmet")
 
-    def set_pkbbs(self, com_sh):
-        """"""
+    def pool_exp(self, exp_sh):
+        """
+        Pools the result of of a distributed exponentiation
+
+        Parameters
+        ----------
+        com_sh : dict
+            Shares of b^temp_1 and its commitments.
+        
+        Returns
+        -------
+        :py:class:`pairing.Element`
+            Result of the exponentiation.
+        """
         r = self.sec_share.group.init(ZR, 1)
         for j in range(1, self.n + 1):
-            bs = com_sh[j]["bs"]
-            ip = self.sec_share.group.init(ZR, j)
-            r *= (bs ** self.sec_share.coeffs[ip])
-        self.pkbbs = r
+            bs = exp_sh[j]["bs"]
+            jp = self.sec_share.group.init(ZR, j)
+            r *= (bs ** self.sec_share.coeffs[jp])
+        return r
+
+    def set_pkbbs(self, exp_sh: dict):
+        """
+        Computes the public key for the BBS scheme
+
+        Parameters
+        ----------
+        com_sh : dict
+            Shares of b^temp_1 and its commitments.
+        """
+        self.pkbbs = self.pool_exp(exp_sh)
 
 # ------------------- Issue -------------------- #
+    def mul_shares(self) -> tuple:
+        """
+        Creates a share to determin the product between temp1 and temp2
 
-    def gen_inv(self):
-        """"""
-        pass
+        Returns
+        -------
+        tuple
+            Values of temp1 and temp2 minus beaver factors.
+        """
+        a, b, _ = self.beaver
+        x = self.temp1
+        y = self.temp2
+        d = x - a
+        e = y - b
+        return (d, e)
 
-    def invert(self):
-        """"""
-        pass
+    def pool_mul(self, mul_sh: dict):
+        """
+        Computes a share temp3 equivalent to the multiplication of the secrets shared in temp1 and temp2
+
+        Parameters
+        ----------
+        mul_sh : dict
+            temp1 and temp2 minus beaver factors of all managers.
+
+        Returns
+        -------
+        :py:class:`pairing.Element`
+            Share of the multiplication.
+        """
+        d_shares = {}
+        e_shares = {}
+        for j in range(1, self.n + 1):
+            d, e = mul_sh[j]
+            jp = self.sec_share.group.init(ZR, j)
+            d_shares[jp] = d
+            e_shares[jp] = e
+        
+        d_rec = self.sec_share.reconstruct(d_shares)
+        e_rec = self.sec_share.reconstruct(e_shares)
+
+        _, _, c = self.beaver
+        x = self.temp1
+        y = self.temp2
+        self.temp3  = c + (x * e_rec) + (y * d_rec) - (e_rec * d_rec)
+        return self.temp3
+
+    def invert(self, winv):
+        """
+        Puts in temp1 the share corresponding to the inverse of the secret shares in temp2
+
+        Parameters
+        ----------
+        winv : :py:class:`pairing.Element`
+            Invertion factor.
+        """
+        self.temp1 = self.temp2 * winv
+
+    def get_alpha(self, pkenc: PublicKey) -> EncryptedMessage:
+        """
+        Computes the shares of the secret signing key for the user
+        
+        Paramenters
+        -----------
+        pk_enc : :py:class:`nacl.public.PublicKey`
+            User's public key.
+
+        Returns
+        -------
+        :py:class:`nacl.utils.EncryptedMessage`
+            Encrypted share.
+        """
+        alpha = self.temp4 - self.skbbs_share
+        return self.encrypt(alpha, pkenc)
 
 # ------------------- Delta Polynomial -------------------- #
     def gen_delta(self, x: int, k: int):

@@ -1,21 +1,15 @@
-from re import I
 from charm.toolbox.hash_module import Hash
 from charm.toolbox.pairinggroup import (
     G1,
     G2,
-    PairingGroup,
-    ZR
+    PairingGroup
 )
-import numpy as np
-from tqdm.contrib.concurrent import thread_map
 
 from bbs import BBS
 from elgamal import ElGamal
 from manager import Manager
 from secshare import SecShare
-from util import (
-    User
-)
+from user import User
 
 class WhoTooPSS():
     """
@@ -110,7 +104,7 @@ class WhoTooPSS():
         #u = v^x : h = v^skeg
         com_sh = {}
         for p in self.managers:
-            com_sh[p.id] = p.commit_gen(self.mgr_pk)
+            com_sh[p.get_index()] = p.commit_gen(self.mgr_pk)
         for p in self.managers:
             p.gen_sk(com_sh, self.mgr_pk)
             p.set_skeg()
@@ -124,18 +118,18 @@ class WhoTooPSS():
         # w = g2^gamma : pkbss = g2^skbss
         com_sh = {}
         for p in self.managers:
-            com_sh[p.id] = p.commit_gen(self.mgr_pk)
+            com_sh[p.get_index()] = p.commit_gen(self.mgr_pk)
         for p in self.managers:
             p.gen_sk(com_sh, self.mgr_pk)
             p.set_skbbs()
             p.copy_2_1()
         
-        com_sh = {}
+        exp_sh = {}
         for p in self.managers:
-            com_sh[p.id] = p.commit_exp(self.g2)
+            exp_sh[p.get_index()] = p.commit_exp(self.g2)
         for p in self.managers:
-            p.verify_exp(com_sh)
-            p.set_pkbbs(com_sh)
+            p.verify_exp(exp_sh)
+            p.set_pkbbs(exp_sh)
         self.pkbbs = self.managers[1].get_pkbbs()
 
         self.bbs = BBS(self.group, self.g1, self.g2, self.pkeg['h'], self.pkbbs, self.sec_share)
@@ -156,7 +150,7 @@ class WhoTooPSS():
         for p in self.managers:
             p.set_beaver(bev)
         # A = r
-        self.managers, r = self.bbs.key_issue(self.managers, user)
+        r = self.bbs.key_issue(user, self.managers, self.mgr_pk)
         self.id_map[r] = user
 
     def recover(self, id, mgr):
@@ -174,18 +168,18 @@ class WhoTooPSS():
         evals = {}
 
         for p in self.managers:
-            if p.id != id:
+            if p.get_index() != id:
                 p.gen_delta(id, self.k)
-                evals[p.id] = p.pub_evals_rec(id, self.mgr_pk)
+                evals[p.get_index()] = p.pub_evals_rec(id, self.mgr_pk)
 
         x_shares = {}
         gamma_shares = {}
 
         for p in self.managers:
-            if p.id != id:
+            if p.get_index() != id:
                 xi, gammai = p.comp_shares(evals, self.mgr_pk, mgr.get_pkenc(), id)
-                x_shares[p.id] = xi
-                gamma_shares[p.id] = gammai
+                x_shares[p.get_index()] = xi
+                gamma_shares[p.get_index()] = gammai
 
         mgr.reconstruct(x_shares, gamma_shares, self.mgr_pk, self.k)
 
@@ -208,14 +202,14 @@ class WhoTooPSS():
         for p in self.managers:
             p.gen_delta(0, self.k)
             p.gen_epsilon()
-            enc_u[p.id] = p.pub_evals_upd(self.mgr_pk)
+            enc_u[p.get_index()] = p.pub_evals_upd(self.mgr_pk)
 
         for p in self.managers:
             if not p.verify_sigs(enc_u, self.mgr_vk):
-                raise Exception(f"Manager {p.id} found an invalid signature")
+                raise Exception(f"Manager {p.get_index()} found an invalid signature")
 
             if not p.verify_upd(enc_u, self.mgr_pk):
-                raise Exception(f"Manager {p.id} found the update commitments to be inconsistent")
+                raise Exception(f"Manager {p.get_index()} found the update commitments to be inconsistent")
 
         self.beaver = []
 

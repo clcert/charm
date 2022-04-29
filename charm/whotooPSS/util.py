@@ -87,31 +87,3 @@ class Accusation():
 		self.sigma = sigma
 		self.pi0 = pi0
 		self.pi1 = pi1
-
-class User():
-
-	"""
-	User class
-
-	skU = (A, alpha)
-		A : R
-		alpha : alpha
-
-	Attributes
-	----------
-	id : int
-		Identifier of the user.
-	da_shares : list[:py:class:`pairing.Element`]
-		Shares of distributed authority commitment.
-	R : :py:class:`pairing.Element`
-		Public key.
-	alpha : :py:class:`pairing.Element`
-		Secret key.
-	"""
-
-	def __init__(self, id, n):
-		self.id = id
-		self.da_shares = [0] * n
-		self.R = None
-		self.alpha = None
-		self.temp = None

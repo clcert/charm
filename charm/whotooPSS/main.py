@@ -1,7 +1,7 @@
 from charm.toolbox.pairinggroup import PairingGroup
 
 from manager import Manager
-from util import User
+from user import User
 from whotoopss import WhoTooPSS
 
 k = 4
@@ -10,7 +10,7 @@ group = PairingGroup('BN254')
 
 whotoo = WhoTooPSS(group, k, n)
 
-user = User(0, n)
+user = User(0, n, whotoo.sec_share)
 whotoo.issue(user)
 
 print("--- Signature verification ---")
@@ -36,7 +36,7 @@ mgr = Manager(rpc, n, whotoo.sec_share)
 whotoo.recover(rpc, mgr)
 whotoo.update()
 
-user1 = User(1, n)
+user1 = User(1, n, whotoo.sec_share)
 whotoo.issue(user1)
 
 id = whotoo.trace(msg, c, sigma)
