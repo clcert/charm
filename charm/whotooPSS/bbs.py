@@ -35,7 +35,7 @@ class BBS():
 		for p in managers:
 			ip = self.group.init(ZR, p.get_index())
 			w_shares[ip] = p.pool_mul(mul_sh)
-		w = self.sec_share.reconstruct(w_shares)
+		w = managers[1].reconstruct(w_shares)
 		winv = w ** -1
 		exp_sh = {}
 		for p in managers:
@@ -44,9 +44,6 @@ class BBS():
 		for p in managers:
 			p.verify_exp(exp_sh)
 		r = managers[1].pool_exp(exp_sh)
-		
-		#TODO: Find out why this affects dist_dec
-		self.sec_share.managers = managers
 
 		pkenc = user.get_pkenc()
 		alpha_shares = {}

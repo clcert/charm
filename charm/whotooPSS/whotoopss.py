@@ -2,7 +2,8 @@ from charm.toolbox.hash_module import Hash
 from charm.toolbox.pairinggroup import (
     G1,
     G2,
-    PairingGroup
+    PairingGroup,
+    ZR
 )
 
 from bbs import BBS
@@ -181,7 +182,7 @@ class WhoTooPSS():
                 x_shares[p.get_index()] = xi
                 gamma_shares[p.get_index()] = gammai
 
-        mgr.reconstruct(x_shares, gamma_shares, self.mgr_pk, self.k)
+        mgr.reconstruct_keys(x_shares, gamma_shares, self.mgr_pk, self.k)
 
         print(f"x_orig     : {self.managers[id-1].skeg_share}")
         print(f"gamma_orig : {self.managers[id-1].skbbs_share}")
@@ -275,7 +276,15 @@ class WhoTooPSS():
             Identity of the signer or -1 if the signature is invalid
         """
         if self.verify(m, c, sigma):
-            r = self.sec_share.dist_dec(c)
+            c1, c2 = c
+            exp_sh = {}
+            for p in self.managers:
+                p.set_trace_key()
+                exp_sh[p.get_index()] = p.commit_exp(c1)
+            for p in self.managers:
+                p.verify_exp(exp_sh)
+            d = self.managers[1].pool_exp(exp_sh)
+            r = c2/d
             return self.id_map[r].id
         else:
             return -1

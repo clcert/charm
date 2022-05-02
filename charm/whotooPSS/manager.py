@@ -495,6 +495,22 @@ class Manager():
         alpha = self.temp4 - self.skbbs_share
         return self.encrypt(alpha, pkenc)
 
+    def reconstruct(self, shares):
+        """
+        A proxy for secret share's reconstruct method
+
+        Parameters
+        ----------
+        shares : dict
+            Shares of a secret.
+
+        Returns
+        -------
+        :py:class:`pairing.Element`
+            Reconstructed value.
+        """
+        return self.sec_share.reconstruct(shares)
+
 # ------------------- Delta Polynomial -------------------- #
     def gen_delta(self, x: int, k: int):
         """
@@ -596,7 +612,7 @@ class Manager():
 
         return (x_enc, gamma_enc)
 
-    def reconstruct(self, x_shares: list, gamma_shares: list, mgr_pk: dict, k: int):
+    def reconstruct_keys(self, x_shares: list, gamma_shares: list, mgr_pk: dict, k: int):
         """
         Reconstructs the shares of the manager's secret key
 
@@ -742,3 +758,8 @@ class Manager():
             self.skbbs_share += u
 
         self.time_step += 1
+
+# ------------------- Trace -------------------- #
+    def set_trace_key(self):
+        """"""
+        self.temp1 = self.skeg_share
