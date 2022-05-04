@@ -2,12 +2,10 @@ from charm.toolbox.hash_module import Hash
 from charm.toolbox.pairinggroup import (
     G1,
     G2,
-    PairingGroup,
-    ZR
+    PairingGroup
 )
 
 from bbs import BBS
-from elgamal import ElGamal
 from manager import Manager
 from secshare import SecShare
 from user import User
@@ -41,8 +39,6 @@ class WhoTooPSS():
         Secret sharing threshold.
     n : int
         Number of managers.
-    eg : :py:class:`elgamal.ElGamal`
-        ElGamal encription.
     sec_share : :py:class:`secshare.SecShare`
         Secret share scheme.
     managers: list[:py:class:`util.Server`]
@@ -85,8 +81,7 @@ class WhoTooPSS():
         self.k = k
         self.n = n
 
-        self.eg = ElGamal(self.group)
-        self.sec_share = SecShare(self.group, self.g1, self.g2, self.k, self.n, self.eg)
+        self.sec_share = SecShare(self.group, self.g1, self.g2, self.k, self.n)
         self.sec_share.h = self.group.random(G1) #temp
 
         #initialize managers
@@ -234,7 +229,7 @@ class WhoTooPSS():
         tuple[tuple[:py:class:`pairing.Element`]]
             Signature of the message.
         """
-        return self.bbs.sign((user.R, user.alpha), msg)
+        return user.sign(msg)
 
     def verify(self, m: str, c: tuple, sigma: tuple) -> bool:
         """
@@ -284,6 +279,10 @@ class WhoTooPSS():
             for p in self.managers:
                 p.verify_exp(exp_sh)
             d = self.managers[1].pool_exp(exp_sh)
+            for p in self.managers:
+                di = p.pool_exp(exp_sh)
+                if di != d:
+                    raise Exception(f"Response from manager {p.get_index()} doesn't match the first manager")
             r = c2/d
             return self.id_map[r].id
         else:

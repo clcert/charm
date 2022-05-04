@@ -32,8 +32,12 @@ class Manager():
         Identifier of the manager.
     n : int
         Total number of managers.
-    da_shares : list[:py:class:`pairing.Element`]
-        Shares of user private key
+    sec_share : :py:class:`secshare.SecShare`
+        Secret share scheme.
+    skenc : :py:class:`nacl.public.PrivateKey`
+        Secret key for encryption scheme.
+    sksig : :py:class:`nacl.signing.SigningKey`
+        Secret key for signing scheme.
     skeg_share : :py:class:`pairing.Element`
         Share of ElGamal secret key.
     pkeg : :py:class:`pairing.Element`
@@ -42,41 +46,36 @@ class Manager():
         Share of BBS secret key.
     pkbbs : :py:class:`pairing.Element`
         BBS public key.
-    skenc : :py:class:`nacl.public.PrivateKey`
-        Secret key for encryption scheme.
-    sksig : :py:class:`nacl.signing.SigningKey`
-        Secret key for signing scheme.
     deltas : list[int]
         Coefficients of delta polynomial.
     epsilon : dict[int -> :py:class:`pairing.Element`]
         Commitments to delta coefficients
     time_step : int
         Current timestep of the scheme.
+    beaver : tuple[:py:class:`pairing.Element`]
+        Currect beaver triplet.
     """
+
     def __init__(self, id: int, n: int, ss: SecShare):
         self.id = id
         self.n = n
-        self.da_shares = [0] * n
         self.sec_share = ss
+        self.skenc = PrivateKey.generate()
+        self.sksig = SigningKey.generate()
         self.skeg_share = None
         self.pkeg = None
         self.skbbs_share = None
         self.pkbbs = None
-        self.skenc = PrivateKey.generate()
-        self.sksig = SigningKey.generate()
+
         self.deltas = []
         self.epsilons = {}
         self.time_step = 0
+        self.beaver = None
 
         self.temp1 = None
         self.temp2 = None
         self.temp3 = None
         self.temp4 = None
-        self.temp5 = None
-        self.temp6 = None
-        self.temp7 = None
-        self.beaver = None
-        self.gen = []
 
 # ------------------- Getters -------------------- #
     def get_index(self) -> int:
@@ -277,7 +276,7 @@ class Manager():
 
     def commit_gen(self, mgr_pk: dict) -> dict:
         """
-        Commit the shares for the ElGamal secret key
+        Commit the shares a secret sharing
 
         Parameters
         ----------
@@ -342,7 +341,7 @@ class Manager():
         for j in range(1, self.n + 1):
             h *= com_sh[j]["feldman"][0]
         self.sec_share.h = h
-        self.pkeg = {"g": self.sec_share.g, "h": h}
+        self.pkeg = {"g": self.sec_share.g1, "h": h}
 
     def set_skbbs(self):
         """
@@ -365,8 +364,8 @@ class Manager():
             Dictionary containg b^temp1, g1^temp1 and a zkproof.
         """
         bs = b ** self.temp1
-        gs = self.sec_share.g ** self.temp1
-        proof = zklogeq(self.sec_share.group, self.sec_share.g, b, self.temp1)
+        gs = self.sec_share.g1 ** self.temp1
+        proof = zklogeq(self.sec_share.group, self.sec_share.g1, b, self.temp1)
         return {"b": b, "bs": bs, "gs": gs, "proof": proof}
 
     def verify_exp(self, exp_sh: dict):
@@ -383,7 +382,7 @@ class Manager():
             if i != j:
                 es = exp_sh[j]
                 a, c, t = es["proof"]
-                ver = zklogeq_verify(self.sec_share.g, es["b"], es["gs"], es["bs"], a, c, t)
+                ver = zklogeq_verify(self.sec_share.g1, es["b"], es["gs"], es["bs"], a, c, t)
                 if not ver:
                     raise Exception(f"Manager {i} failed to verify {j}'s commitmet")
 
@@ -495,7 +494,7 @@ class Manager():
         alpha = self.temp4 - self.skbbs_share
         return self.encrypt(alpha, pkenc)
 
-    def reconstruct(self, shares):
+    def reconstruct(self, shares: dict):
         """
         A proxy for secret share's reconstruct method
 
@@ -658,7 +657,7 @@ class Manager():
         """
         k = len(self.deltas)
         for m in range(0, k):
-            self.epsilons[m] = self.sec_share.g ** self.deltas[m]
+            self.epsilons[m] = self.sec_share.g1 ** self.deltas[m]
 
     def pub_evals_upd(self, mgr_pk: dict) -> tuple:
         """
@@ -737,7 +736,7 @@ class Manager():
                 prod = 1
                 for m in pkt["epsilons"].keys():
                     prod *= (pkt["epsilons"][m] ** (self.id ** m))
-                result = result and (self.sec_share.g ** u == prod)
+                result = result and (self.sec_share.g1 ** u == prod)
         
         return result
 
@@ -761,5 +760,7 @@ class Manager():
 
 # ------------------- Trace -------------------- #
     def set_trace_key(self):
-        """"""
+        """
+        Puts the share of the ElGamal secret key into temp1
+        """
         self.temp1 = self.skeg_share

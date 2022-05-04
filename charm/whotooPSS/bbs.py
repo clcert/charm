@@ -52,6 +52,7 @@ class BBS():
 
 		user.set_skU(alpha_shares, mgr_pk)
 		user.set_pkU(r)
+		user.set_bbs(self)
 
 		return r
 

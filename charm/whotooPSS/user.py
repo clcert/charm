@@ -20,21 +20,29 @@ class User():
     ----------
     id : int
         Identifier of the user.
-    da_shares : list[:py:class:`pairing.Element`]
-        Shares of distributed authority commitment.
+    n : int
+        Number of managers in the scheme.
+    sec_share : :py:class:`secshare.SecShare`
+        Secret share scheme.
+    bbs : :py:class:`bbs.BBS`
+        BBS scheme.
+    skenc : :py:class:`nacl.public.PrivateKey`
+        Secret key for encryption scheme.
     R : :py:class:`pairing.Element`
         Public key.
     alpha : :py:class:`pairing.Element`
         Secret key.
     """
+
     def __init__(self, id, n, ss: SecShare):
         self.id = id
         self.n = n
         self.sec_share = ss
+        self.bbs = None
+
         self.skenc = PrivateKey.generate()
         self.R = None
         self.alpha = None
-        self.temp = None
 
     def get_pkenc(self) -> PublicKey:
         """
@@ -68,7 +76,19 @@ class User():
         return rm.decode('utf-8')
 
     def reconstruct(self, shares: dict):
-        """"""
+        """
+        A proxy for secret share's reconstruct method
+
+        Parameters
+        ----------
+        shares : dict
+            Shares of a secret.
+
+        Returns
+        -------
+        :py:class:`pairing.Element`
+            Reconstructed value.
+        """
         return self.sec_share.reconstruct(shares)
 
     def set_pkU(self, R):
@@ -99,3 +119,25 @@ class User():
             dec = int(self.decrypt(shares[i], mgr_pk[i]))
             dec_shares[ip] = self.sec_share.group.init(ZR, dec)
         self.alpha = self.reconstruct(dec_shares)
+
+    def set_bbs(self, bbs):
+        """
+        Sets the BBS scheme
+        """
+        self.bbs = bbs
+
+    def sign(self, msg: str) -> tuple:
+        """
+        Signs a message
+
+        Parameters
+        ----------
+        msg : str
+            Message to be signed.
+
+        Returns
+        -------
+        tuple
+            BBS signature.
+        """
+        return self.bbs.sign((self.R, self.alpha), msg)
