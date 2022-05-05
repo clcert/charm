@@ -12,6 +12,7 @@ from nacl.public import (
 )
 from nacl.utils import EncryptedMessage
 
+from bbs import BBS
 from secshare import SecShare
 from util import (
     zklogeq,
@@ -56,10 +57,11 @@ class Manager():
         Currect beaver triplet.
     """
 
-    def __init__(self, id: int, n: int, ss: SecShare):
+    def __init__(self, id: int, n: int):
         self.id = id
         self.n = n
-        self.sec_share = ss
+        self.sec_share = None
+        self.bbs = None
         self.skenc = PrivateKey.generate()
         self.sksig = SigningKey.generate()
         self.skeg_share = None
@@ -225,6 +227,14 @@ class Manager():
         self.temp4 = self.temp2
 
 # ------------------- Initialization -------------------- #
+    def init_schemes(self, group, g1, g2, k, pkeg, pkbbs):
+        """
+        Initializes the secret share scheme.
+        """
+        self.sec_share = SecShare(group, g1, g2, k, self.n)
+        self.sec_share.h = pkeg["h"]
+        self.bbs = BBS(group, g1, g2, pkeg["h"], pkbbs, self.sec_share)
+
     def gen_beaver(self, mgr_pk: dict) -> tuple:
         """
         Generates beaver triplets for every manager
@@ -341,6 +351,7 @@ class Manager():
         for j in range(1, self.n + 1):
             h *= com_sh[j]["feldman"][0]
         self.sec_share.h = h
+        self.bbs.v = h
         self.pkeg = {"g": self.sec_share.g1, "h": h}
 
     def set_skbbs(self):
@@ -417,6 +428,7 @@ class Manager():
             Shares of b^temp_1 and its commitments.
         """
         self.pkbbs = self.pool_exp(exp_sh)
+        self.bbs.w = self.pkbbs
 
 # ------------------- Issue -------------------- #
     def mul_shares(self) -> tuple:
@@ -528,7 +540,6 @@ class Manager():
         for i in range(1, k):
             deltas[i] = self.sec_share.group.random(ZR)
             deltas[0] -= deltas[i] * (x ** i)
-        
         self.deltas = deltas
 
     def eval_d(self, x: int) -> int:

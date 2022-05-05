@@ -6,6 +6,7 @@ from nacl.public import (
 )
 from nacl.utils import EncryptedMessage
 
+from bbs import BBS
 from secshare import SecShare
 
 class User():
@@ -34,15 +35,23 @@ class User():
         Secret key.
     """
 
-    def __init__(self, id, n, ss: SecShare):
+    def __init__(self, id, n):
         self.id = id
         self.n = n
-        self.sec_share = ss
+        self.sec_share = None
         self.bbs = None
 
         self.skenc = PrivateKey.generate()
         self.R = None
         self.alpha = None
+
+    def init_schemes(self, group, g1, g2, k, pkeg, pkbbs):
+        """
+        Initializes the secret share scheme.
+        """
+        self.sec_share = SecShare(group, g1, g2, k, self.n)
+        self.sec_share.h = pkeg["h"]
+        self.bbs = BBS(group, g1, g2, pkeg["h"], pkbbs, self.sec_share)
 
     def get_pkenc(self) -> PublicKey:
         """

@@ -3,8 +3,6 @@ from charm.toolbox.pairinggroup import ZR
 from charm.core.engine.util import objectToBytes
 from charm.toolbox.secretshare import *
 
-from user import User
-
 class BBS():
 
 	def __init__(self, group, g1, g2, h, w, sec_share):
@@ -17,37 +15,45 @@ class BBS():
 		self.w = w
 		self.h = Hash(pairingElement=self.group)
 
-	def key_issue(self, user: User, managers: list, mgr_pk: dict):
+	def key_issue(self, user, managers: list, mgr_pk: dict):
 		com_sh = {}
-		for p in managers:
+		for p in managers.values():
 			com_sh[p.get_index()] = p.commit_gen(mgr_pk)
-		for p in managers:
+		for p in managers.values():
 			p.gen_sk(com_sh, mgr_pk)
 			p.copy_2_1()
 			p.copy_2_4()
 			com_sh[p.get_index()] = p.commit_gen(mgr_pk)
-		for p in managers:
+		for p in managers.values():
 			p.gen_sk(com_sh, mgr_pk)
 		mul_sh = {}
-		for p in managers:
+		for p in managers.values():
 			mul_sh[p.get_index()] = p.mul_shares()
 		w_shares = {}
-		for p in managers:
+		for p in managers.values():
 			ip = self.group.init(ZR, p.get_index())
 			w_shares[ip] = p.pool_mul(mul_sh)
 		w = managers[1].reconstruct(w_shares)
+		for p in managers.values():
+			wi = p.reconstruct(w_shares)
+			if w != wi:
+				raise Exception(f"Response from manager {p.get_index()} doesn't match the first manager")
 		winv = w ** -1
 		exp_sh = {}
-		for p in managers:
+		for p in managers.values():
 			p.invert(winv)
 			exp_sh[p.get_index()] = p.commit_exp(self.g1)
-		for p in managers:
+		for p in managers.values():
 			p.verify_exp(exp_sh)
 		r = managers[1].pool_exp(exp_sh)
+		for p in managers.values():
+			ri = p.pool_exp(exp_sh)
+			if r != ri:
+				raise Exception(f"Response from manager {p.get_index()} doesn't match the first manager")
 
 		pkenc = user.get_pkenc()
 		alpha_shares = {}
-		for p in managers:
+		for p in managers.values():
 			alpha_shares[p.get_index()] = p.get_alpha(pkenc)
 
 		user.set_skU(alpha_shares, mgr_pk)

@@ -10,13 +10,24 @@ group = PairingGroup('BN254')
 
 whotoo = WhoTooPSS(group, k, n)
 
-user = User(0, n, whotoo.sec_share)
+for i in range(1, n+1):
+    mgr = Manager(i, n)
+    whotoo.add_manager(mgr)
+
+whotoo.gen_beaver()
+whotoo.init_elgamal()
+whotoo.init_bbs()
+
+user = User(0, n)
+user.init_schemes(group, whotoo.g1, whotoo.g2, k, whotoo.pkeg, whotoo.pkbbs)
 whotoo.issue(user)
 
 print("--- Signature verification ---")
+verifier = User(2, n)
+verifier.init_schemes(group, whotoo.g1, whotoo.g2, k, whotoo.pkeg, whotoo.pkbbs)
 msg = "Message to sign"
 (c, sigma) = whotoo.sign(user, msg)
-verified = whotoo.verify(msg, c, sigma)
+verified = whotoo.verify(verifier, msg, c, sigma)
 print(verified)
 
 print("--- Signature tracing ---")
@@ -32,11 +43,13 @@ print(whotoo.managers[2].decrypt(cph, whotoo.managers[1].get_pkenc()))
 
 print("--- Manager replacement ---")
 rpc = 3
-mgr = Manager(rpc, n, whotoo.sec_share)
+mgr = Manager(rpc, n)
+mgr.init_schemes(group, whotoo.g1, whotoo.g2, k, whotoo.pkeg, whotoo.pkbbs)
 whotoo.recover(rpc, mgr)
 whotoo.update()
 
-user1 = User(1, n, whotoo.sec_share)
+user1 = User(1, n)
+user1.init_schemes(group, whotoo.g1, whotoo.g2, k, whotoo.pkeg, whotoo.pkbbs)
 whotoo.issue(user1)
 
 id = whotoo.trace(msg, c, sigma)
@@ -46,7 +59,7 @@ else:
     print(f"Accuser identified as {id}")
 
 (c, sigma) = whotoo.sign(user1, msg)
-verified = whotoo.verify(msg, c, sigma)
+verified = whotoo.verify(verifier, msg, c, sigma)
 print(verified)
 
 id = whotoo.trace(msg, c, sigma)
