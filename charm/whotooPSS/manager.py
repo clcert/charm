@@ -29,12 +29,16 @@ class Manager():
 
     Attributes
     ----------
-    id : int
+    index : int
         Identifier of the manager.
+    name : str
+        Screen name of the manager.
     n : int
         Total number of managers.
     sec_share : :py:class:`secshare.SecShare`
         Secret share scheme.
+    bbs : :py:class:`bbs.BBS`
+        BBS signature scheme.
     skenc : :py:class:`nacl.public.PrivateKey`
         Secret key for encryption scheme.
     sksig : :py:class:`nacl.signing.SigningKey`
@@ -58,7 +62,8 @@ class Manager():
     """
 
     def __init__(self, id: int, n: int):
-        self.id = id
+        self.index = id
+        self.name = f"Manager{id}"
         self.n = n
         self.sec_share = None
         self.bbs = None
@@ -89,7 +94,7 @@ class Manager():
         int
             Manager's index in the secret share polynomials.
         """
-        return self.id
+        return self.index
 
     def get_pkenc(self) -> PublicKey:
         """
@@ -279,9 +284,9 @@ class Manager():
             Shares of the beaver triplets.
         """
         pk, a, b, c = bev
-        ai = int(self.decrypt(a[self.id], pk))
-        bi = int(self.decrypt(b[self.id], pk))
-        ci = int(self.decrypt(c[self.id], pk))
+        ai = int(self.decrypt(a[self.index], pk))
+        bi = int(self.decrypt(b[self.index], pk))
+        ci = int(self.decrypt(c[self.index], pk))
         self.beaver = (ai, bi, ci)
 
     def commit_gen(self, mgr_pk: dict) -> dict:
@@ -320,7 +325,7 @@ class Manager():
             Public keys of the managers.
         """
         self.temp2 = 0
-        i = self.id
+        i = self.index
         for j in range(1, self.n + 1):
             dec = self.decrypt(com_sh[j]["shares"][i], mgr_pk[j])
             sj, rj = map(int, dec[1:-1].split(","))
@@ -388,7 +393,7 @@ class Manager():
         com_sh : dict
             Shares of b^temp_1 and its commitments.
         """
-        i = self.id
+        i = self.index
         for j in range(1, self.n + 1):
             if i != j:
                 es = exp_sh[j]
@@ -613,7 +618,7 @@ class Manager():
 
         for i in range(1, self.n + 1):
             if i != r:
-                dec_delta = int(self.decrypt(evals[i][self.id], mgr_pk[i]))
+                dec_delta = int(self.decrypt(evals[i][self.index], mgr_pk[i]))
                 x_prime += dec_delta
                 gamma_prime += dec_delta
 
@@ -652,8 +657,8 @@ class Manager():
             x_dec[key] = self.sec_share.group.init(ZR, xi)
             gamma_dec[key] = self.sec_share.group.init(ZR, gammai)
 
-        x = self.sec_share.reconstruct_d(x_dec, self.id, k)
-        gamma = self.sec_share.reconstruct_d(gamma_dec, self.id, k)
+        x = self.sec_share.reconstruct_d(x_dec, self.index, k)
+        gamma = self.sec_share.reconstruct_d(gamma_dec, self.index, k)
 
         print(f"x_rec      : {x}")
         print(f"gamma_rec  : {gamma}")
@@ -689,8 +694,8 @@ class Manager():
         for i in mgr_pk.keys():
             e[i] = self.encrypt(self.eval_d(i), mgr_pk[i])
         
-        v = {"id": self.id, "time": self.time_step + 1, "epsilons": self.epsilons.copy(), "e": e.copy()}
-        vs = {"id": self.id, "time": self.time_step + 1, "epsilons": self.epsilons.copy(), "e": e.copy()}
+        v = {"time": self.time_step + 1, "epsilons": self.epsilons.copy(), "e": e.copy()}
+        vs = {"time": self.time_step + 1, "epsilons": self.epsilons.copy(), "e": e.copy()}
 
         for i in vs["epsilons"].keys():
             vs["epsilons"][i] = str(vs["epsilons"][i])
@@ -722,7 +727,7 @@ class Manager():
             try:
                 result = result and self.verify(mgr_vk[j], evals[j][1])
             except:
-                raise Exception(f"Manager {self.id} found {j}'s signature to be invalid")
+                raise Exception(f"Manager {self.index} found {j}'s signature to be invalid")
         return result
 
     def verify_upd(self, evals: dict, mgr_pk: dict) -> bool:
@@ -741,12 +746,12 @@ class Manager():
         """
         result = True
         for j in evals.keys():
-            if j != self.id:
+            if j != self.index:
                 pkt = evals[j][0]
-                u = int(self.decrypt(pkt["e"][self.id], mgr_pk[j]))
+                u = int(self.decrypt(pkt["e"][self.index], mgr_pk[j]))
                 prod = 1
                 for m in pkt["epsilons"].keys():
-                    prod *= (pkt["epsilons"][m] ** (self.id ** m))
+                    prod *= (pkt["epsilons"][m] ** (self.index ** m))
                 result = result and (self.sec_share.g1 ** u == prod)
         
         return result
@@ -763,7 +768,7 @@ class Manager():
             Public keys of all the managers.
         """
         for j in evals.keys():
-            u = int(self.decrypt(evals[j][0]["e"][self.id], mgr_pk[j]))
+            u = int(self.decrypt(evals[j][0]["e"][self.index], mgr_pk[j]))
             self.skeg_share += u
             self.skbbs_share += u
 

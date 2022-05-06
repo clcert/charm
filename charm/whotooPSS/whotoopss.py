@@ -26,12 +26,6 @@ class WhoTooPSS():
     ----------
     group : :py:class:`charm.toolbox.pairinggroup.PairingGroup`
         Pairing group.
-    hash_func : :py:class:`charm.toolbox.hash_module.Hash`
-        Hash function.
-    users : list[:py:class:`util.User`]
-        Users registered in the scheme (valid accusers in WhoToo+).
-    id_map : dict[:py:class:`pairing.Element`, :py:class:`util.User`]
-        Dictionary of users using thier public key A (R in WhoToo+).
     g1 : :py:class:`pairing.Element`
         Generator of the fist bilineal group.
     g2 : :py:class:`pairing.Element`
@@ -40,12 +34,20 @@ class WhoTooPSS():
         Secret sharing threshold.
     n : int
         Number of managers.
-    managers: list[:py:class:`util.Server`]
-        Current managers in the scheme (servers in WhoToo+).
     pkeg : dict[str, :py:class:`pairing.Element`]
         Public key of ElGamal encryption.
     pkbss : :py:class:`pairing.Element`
         Public key of BBS scheme
+    managers : dict[int, :py:class:`util.Server`]
+        Current managers in the scheme (servers in WhoToo+).
+    bev_st : list[tuple[:py:class:`pairing.Element`]]
+        Stack of beaver triplet shares.
+    mgr_pk : dict[int, :py:class:`nacl.public.PublicKey`]
+        Public encryption key of each manager.
+    mgr_vk : dict[int, :py:class:`nacl.signing.VerifyKey`]
+        Signature verification key of each manager.
+    user_id : dict[:py:class:`pairing.Element`, :py:class:`util.User`]
+        Dictionary of users using thier public key A (R in WhoToo+).
 
     Methods
     -------
@@ -64,24 +66,22 @@ class WhoTooPSS():
     """
 
     def __init__(self, group: PairingGroup, k: int, n: int):
-
         self.group = group
-        self.hash_func = Hash(pairingElement=self.group)
-
-        self.managers = {}
-        self.beaver = []
-        self.mgr_pk = {}
-        self.mgr_vk = {}
-        self.id_map = {}
-        
         self.g1 = self.group.random(G1)
         self.g2 = self.group.random(G2)
 
         self.k = k
         self.n = n
+
         h = self.group.random(G1) #temp
         self.pkeg = {"g": self.g1, "h": h}
         self.pkbbs = None
+
+        self.managers = {}
+        self.bev_st = []
+        self.mgr_pk = {}
+        self.mgr_vk = {}
+        self.user_id = {}
 
     def add_manager(self, mgr: Manager):
         if len(self.managers.keys()) >= self.n:
@@ -100,7 +100,7 @@ class WhoTooPSS():
         if len(self.mgr_pk.keys()) < self.n:
             raise Exception("All manager public encryption keys are required")
         for p in self.managers.values():
-            self.beaver.append(p.gen_beaver(self.mgr_pk))
+            self.bev_st.append(p.gen_beaver(self.mgr_pk))
 
     def init_elgamal(self):
         """
@@ -160,14 +160,14 @@ class WhoTooPSS():
         user : :py:class:`util.User`
             User requesting a signing key.
         """
-        if not self.beaver:
+        if not self.bev_st:
             self.gen_beaver()
-        bev = self.beaver.pop()
+        bev = self.bev_st.pop()
         for p in self.managers.values():
             p.set_beaver(bev)
         # A = r
         r = user.bbs.key_issue(user, self.managers, self.mgr_pk)
-        self.id_map[r] = user
+        self.user_id[r] = user
 
     def recover(self, id, mgr):
         """
@@ -229,7 +229,7 @@ class WhoTooPSS():
         for p in self.managers.values():
             p.update_shares(enc_u, self.mgr_pk)
         
-        self.beaver = []
+        self.bev_st = []
         self.gen_beaver()
 
     def sign(self, user: User, msg: str) -> "tuple[tuple]":
@@ -306,6 +306,6 @@ class WhoTooPSS():
                 if di != d:
                     raise Exception(f"Response from manager {p.get_index()} doesn't match the first manager")
             r = c2/d
-            return self.id_map[r].id
+            return self.user_id[r].name
         else:
             return -1

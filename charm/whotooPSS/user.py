@@ -37,6 +37,7 @@ class User():
 
     def __init__(self, id, n):
         self.id = id
+        self.name = f"User{id}"
         self.n = n
         self.sec_share = None
         self.bbs = None
