@@ -63,7 +63,6 @@ class Manager():
 
     def __init__(self, id: int, n: int):
         self.index = id
-        self.name = f"Manager{id}"
         self.n = n
         self.sec_share = None
         self.bbs = None
@@ -107,6 +106,17 @@ class Manager():
         """
         return self.skenc.public_key
 
+    def _get_skenc(self) -> bytes:
+        """
+        Gets the manager's encryption secret key
+
+        Returns
+        -------
+        bytes
+            Manager's public key
+        """
+        return self.skenc.encode()
+
     def get_pksig(self) -> bytes:
         """
         Get the manager's signing public key
@@ -117,6 +127,17 @@ class Manager():
             Manager's signing key
         """
         return self.sksig.verify_key.encode()
+
+    def _get_sksig(self) -> bytes:
+        """
+        Gets the manager's signing secret key
+
+        Returns
+        -------
+        bytes
+            Manager's public key
+        """
+        return self.skenc.encode()
 
     def get_pkeg(self):
         """

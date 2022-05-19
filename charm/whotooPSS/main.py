@@ -12,6 +12,7 @@ whotoo = WhoTooPSS(group, k, n)
 
 for i in range(1, n+1):
     mgr = Manager(i, n)
+    print(mgr._get_skenc())
     whotoo.add_manager(mgr)
 
 whotoo.gen_beaver()

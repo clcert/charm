@@ -306,6 +306,6 @@ class WhoTooPSS():
                 if di != d:
                     raise Exception(f"Response from manager {p.get_index()} doesn't match the first manager")
             r = c2/d
-            return self.user_id[r].name
+            return self.user_id[r].id
         else:
             return -1

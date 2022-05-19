@@ -37,7 +37,6 @@ class User():
 
     def __init__(self, id, n):
         self.id = id
-        self.name = f"User{id}"
         self.n = n
         self.sec_share = None
         self.bbs = None
@@ -64,6 +63,17 @@ class User():
             Manager's public key
         """
         return self.skenc.public_key
+
+    def _get_skenc(self) -> bytes:
+        """
+        Gets the user's encryption secret key
+
+        Returns
+        -------
+        bytes
+            Manager's public key
+        """
+        return self.skenc.encode()
 
     def decrypt(self, cph: EncryptedMessage, spk: PublicKey) -> str:
         """
