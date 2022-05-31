@@ -8,6 +8,7 @@ from nacl.utils import EncryptedMessage
 
 from bbs import BBS
 from secshare import SecShare
+from util import base64_to_bytes
 
 class User():
     """
@@ -44,6 +45,17 @@ class User():
         self.skenc = PrivateKey.generate()
         self.R = None
         self.alpha = None
+
+    def set_nacl(self, skenc: str):
+        """
+        Sets the encryption key from a base64 string.
+
+        Parameters
+        ----------
+        skenc : str
+            Encryption secret key.
+        """
+        self.skenc = PrivateKey(base64_to_bytes(skenc))
 
     def init_schemes(self, group, g1, g2, k, pkeg, pkbbs):
         """

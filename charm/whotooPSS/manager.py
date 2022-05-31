@@ -15,6 +15,7 @@ from nacl.utils import EncryptedMessage
 from bbs import BBS
 from secshare import SecShare
 from util import (
+    base64_to_bytes,
     zklogeq,
     zklogeq_verify
 )
@@ -106,17 +107,6 @@ class Manager():
         """
         return self.skenc.public_key
 
-    def _get_skenc(self) -> bytes:
-        """
-        Gets the manager's encryption secret key
-
-        Returns
-        -------
-        bytes
-            Manager's public key
-        """
-        return self.skenc.encode()
-
     def get_pksig(self) -> bytes:
         """
         Get the manager's signing public key
@@ -127,17 +117,6 @@ class Manager():
             Manager's signing key
         """
         return self.sksig.verify_key.encode()
-
-    def _get_sksig(self) -> bytes:
-        """
-        Gets the manager's signing secret key
-
-        Returns
-        -------
-        bytes
-            Manager's public key
-        """
-        return self.skenc.encode()
 
     def get_pkeg(self):
         """
@@ -253,6 +232,20 @@ class Manager():
         self.temp4 = self.temp2
 
 # ------------------- Initialization -------------------- #
+    def set_nacl(self, skenc: str, sksig: str):
+        """
+        Sets the encryption and signature key from a base64 string.
+
+        Parameters
+        ----------
+        skenc : str
+            Encryption secret key.
+        sksig : str
+            Signature secret key.
+        """
+        self.skenc = PrivateKey(base64_to_bytes(skenc))
+        self.sksig = SigningKey(base64_to_bytes(sksig))
+
     def init_schemes(self, group, g1, g2, k, pkeg, pkbbs):
         """
         Initializes the secret share scheme.
