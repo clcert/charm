@@ -1,4 +1,7 @@
-from base64 import b64decode
+from base64 import (
+	b64encode,
+	b64decode
+)
 from charm.core.engine.util import objectToBytes
 from charm.toolbox.pairinggroup import ZR
 from charm.toolbox.hash_module import Hash
@@ -18,6 +21,14 @@ def base64_to_bytes(key: str) -> bytes:
 		Byte array to reconstruct the key.
 	"""
 	return b64decode(key.encode("utf-8"))
+
+def element_to_str(group, e):
+	s = group.serialize(e)
+	return b64encode(s).decode("utf-8")
+
+def str_to_element(group, s):
+	d = b64decode(s.encode("utf-8"))
+	return group.deserialize(d)
 
 def pedersen_commit(g, h, msg, r):
 	return (g ** msg) * (h ** r)
