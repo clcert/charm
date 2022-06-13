@@ -1,4 +1,5 @@
 from charm.toolbox.pairinggroup import PairingGroup
+from nacl.encoding import Base64Encoder
 
 from manager import Manager
 from user import User
@@ -12,7 +13,7 @@ whotoo = WhoTooPSS(group, k, n)
 
 for i in range(1, n+1):
     mgr = Manager(i, n)
-    print(mgr._get_skenc())
+    #print(mgr.skenc.encode(Base64Encoder).decode("utf-8"))
     whotoo.add_manager(mgr)
 
 whotoo.gen_beaver()
